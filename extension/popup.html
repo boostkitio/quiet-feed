@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Quiet Feed</title><link rel="stylesheet" href="popup.css"></head>
+<body><header><span class="mark" aria-hidden="true">q.</span><div><h1>Quiet Feed</h1><p>A little less artificial.</p></div><span class="pill">LINKEDIN</span></header>
+<main>
+  <section class="connection"><span id="dot" class="dot"></span><div><strong id="connection">Checking Companion…</strong><p id="connectionDetail">Your feed, with the noise turned down.</p></div></section>
+  <section class="control"><div><h2>Filter Comments &amp; Replies</h2><p>Less automated chatter.<br>Keep the conversation worth reading.</p></div><label class="switch"><input id="enabled" type="checkbox" checked aria-label="Enable filtering"><span></span></label></section>
+  <p>Jev checks loaded comments automatically. Likely AI replies collapse with a <strong>Show Reply</strong> button. Hover over a comment for optional feedback. Original posts are not scanned.</p>
+  <section class="control jobs-control"><div><h2>Hide Recommended Jobs</h2><p>Remove “Jobs recommended for you”.<br>Turn off to show the section again.</p></div><label class="switch"><input id="hideRecommendedJobs" type="checkbox" checked aria-label="Hide recommended jobs"><span></span></label></section>
+  <section class="numbers"><div><strong id="analysed">0</strong><span>Replies Checked</span></div><div><strong id="remaining">100</strong><span>Requests Left</span></div></section>
+  <details><summary>Your Feedback</summary><p id="feedbackCounts">0 flagged · 0 kept</p><p>Flag a reply as potentially AI, or keep one we hid. Your choices personalise future checks. These are preferences, not verified authorship labels.</p><button id="clearFeedback" class="secondary">Reset Learning</button></details>
+  <details id="settingsPanel"><summary>Connection &amp; Limits</summary><label for="token">Companion Pairing Code</label><input id="token" type="password" placeholder="Paste code from Start Quiet Feed" autocomplete="off"><button id="pair" class="primary">Connect Companion</button><label for="limit">Requests Per Browser Session</label><input id="limit" type="number" min="10" max="500" value="100"><button id="reset" class="secondary">Reset Session &amp; Retry</button><p>Resetting allows more requests. The companion also caps requests at 500 per day while running.</p></details>
+  <p id="message" role="status" aria-live="polite"></p>
+  <footer>Reply text and a small selection of your saved feedback examples are sent to TypeSafe. Feedback is stored locally; private messages are excluded. AI writing cannot be identified perfectly. <a href="https://docs.typesafe.ai" target="_blank" rel="noreferrer">About TypeSafe</a></footer>
+</main><script src="popup.js"></script></body></html>

@@ -1,0 +1,41 @@
+import { chromium } from 'playwright';
+import { readFile, writeFile, cp, mkdir, mkdtemp } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import { tmpdir } from 'node:os';
+import assert from 'node:assert/strict';
+await mkdir('work',{recursive:true});
+const extension=await mkdtemp(resolve('work/update-fixture-'));
+await cp(resolve('dist/extension'),extension,{recursive:true,filter:path=>!path.endsWith('local-connection.json')});
+const currentWorker=await readFile(resolve(extension,'background.js'),'utf8');
+const currentManifest=await readFile(resolve(extension,'manifest.json'),'utf8');
+await writeFile(resolve(extension,'manifest.json'),JSON.stringify({...JSON.parse(currentManifest),version:'0.2.0'}));
+// Historical message contract: it knows settings/status, but not feedback/build.
+await writeFile(resolve(extension,'background.js'),`chrome.runtime.onMessage.addListener((m,s,reply)=>{if(m.type==='settings')reply({settings:{enabled:true,limit:100}});else if(m.type==='status')reply({settings:{enabled:true,limit:100},session:{},paired:false,health:null,error:'Connect the companion'});else reply({error:'Invalid extension request'});return true;});`);
+const profile=await mkdtemp(resolve(tmpdir(),'quiet-update-'));
+let context=await chromium.launchPersistentContext(profile,{channel:'chromium',headless:true,args:[`--disable-extensions-except=${extension}`,`--load-extension=${extension}`]});
+try{
+ let [worker]=context.serviceWorkers();if(!worker)worker=await context.waitForEvent('serviceworker');
+ const id=new URL(worker.url()).hostname;
+ await context.route('https://www.linkedin.com/**',route=>readFile('tests/feed.html','utf8').then(body=>route.fulfill({status:200,contentType:'text/html',body})));
+ const page=await context.newPage();await page.goto('https://www.linkedin.com/feed/');
+ await page.waitForFunction(()=>document.documentElement.dataset.quietFeedWorkerBuild==='legacy');
+ assert.equal(await page.locator('.qf-reply-host:not([hidden])').count(),0,'unsupported feedback controls are not offered');
+ const popup=await context.newPage();await popup.goto(`chrome-extension://${id}/popup.html`);
+ await popup.getByText('Update Ready',{exact:true}).waitFor();
+ assert.ok((await popup.locator('#connectionDetail').innerText()).includes('chrome://extensions'));
+ assert.equal(await popup.locator('#hideRecommendedJobs').isDisabled(),true);
+ const oldReply=await popup.evaluate(()=>chrome.runtime.sendMessage({type:'feedback',text:'fixture',label:'potential-ai'}));
+ assert.equal(oldReply.error,'Invalid extension request','reproduces the legacy worker error');
+ await writeFile(resolve(extension,'background.js'),currentWorker);
+ await writeFile(resolve(extension,'manifest.json'),currentManifest);
+ await context.close();
+ context=await chromium.launchPersistentContext(await mkdtemp(resolve(tmpdir(),'quiet-current-build-')),{channel:'chromium',headless:true,args:[`--disable-extensions-except=${extension}`,`--load-extension=${extension}`]});
+ const fresh=await context.newPage();await fresh.goto(`chrome-extension://${id}/popup.html`);
+ const state=await fresh.evaluate(()=>chrome.runtime.sendMessage({type:'status'}));
+ assert.equal(state.build,JSON.parse(await readFile('package.json','utf8')).version);
+ await fresh.locator('#connection').getByText('Connect Your Companion',{exact:true}).waitFor();
+ await context.route('https://www.linkedin.com/**',route=>readFile('tests/feed.html','utf8').then(body=>route.fulfill({status:200,contentType:'text/html',body})));
+ const currentPage=await context.newPage();await currentPage.goto('https://www.linkedin.com/feed/');
+ await currentPage.waitForFunction(()=>document.documentElement.dataset.quietFeedBuild===document.documentElement.dataset.quietFeedWorkerBuild);
+ console.log('Passed: legacy Invalid extension request reproduced; mismatched controls gated with clear update instructions; clean installation loads matching worker and page. Chrome command-line profiles do not test the real user-profile reload action.');
+}finally{await context.close();}

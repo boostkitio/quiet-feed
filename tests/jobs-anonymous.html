@@ -1,0 +1,15 @@
+<!-- Sanitised structural reproduction of the supplied LinkedIn markup.
+     Header and carousel share an anonymous div; the section is inside the carousel. -->
+<div>
+  <div componentkey="header"><div><div><p componentkey="title"><span>Jobs recommended for you</span></p></div></div></div>
+  <div><div data-view-name="feed-update-carousel" data-display-contents="true">
+    <div data-view-name="feed-update-carousel" data-testid="carousel-container">
+      <div data-testid="carousel-viewport-container"><section role="list" data-testid="carousel" aria-roledescription="carousel">
+        <ul data-testid="carousel-children-container"><li data-testid="carousel-child-container">
+          <div data-view-name="job-card" data-display-contents="true"><a href="https://www.linkedin.com/jobs/search-results/"><div><p>Example Job</p><p>Example Company</p></div></a></div>
+        </li></ul>
+      </section></div>
+    </div>
+  </div></div>
+  <hr role="presentation"><a data-view-name="feed-call-to-action" href="https://www.linkedin.com/jobs/search-results/"><span>Show more</span></a>
+</div>

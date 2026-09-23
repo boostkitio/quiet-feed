@@ -1,0 +1,27 @@
+{
+  "name": "linkedin-typesafe-filter",
+  "version": "0.4.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test tests/*.test.ts",
+    "test:browser": "node tests/browser.mjs",
+    "test:update": "node tests/update.mjs",
+    "test:jobs": "node tests/jobs-markup.mjs",
+    "test:mac": "node tests/mac-connect.mjs",
+    "verify": "npm run typecheck && npm test && npm run test:mac && npm run build && npm run test:browser && npm run test:update && npm run test:jobs",
+    "start": "node dist/server.mjs"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.3.0",
+    "@types/node": "^26.6.1",
+    "esbuild": "^0.28.2",
+    "playwright": "^1.63.0",
+    "typescript": "^7.0.2"
+  }
+}
