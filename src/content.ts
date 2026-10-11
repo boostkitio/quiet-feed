@@ -1,20 +1,35 @@
-import { BUILD_VERSION, DEFAULTS, FEED_FILTER_KEYS, POST_AGE_OPTIONS, PREFERENCE_THRESHOLD, cleanSettings, flagged, type FeedbackLabel, type Settings, type Verdict } from './shared.ts';
-import { POSTS, COMMENTS, EXCLUDED, containsPromoted, feedSortControl, postAgeDays, replyNodes, replyText, videoRecommendationSections, jobRecommendationSections } from './dom.ts';
+import { BUILD_VERSION, DEFAULTS, FEED_FILTER_KEYS, POST_AGE_OPTIONS, PREFERENCE_THRESHOLD, cleanSettings, engagementBait, flagged, mutedWord, type FeedbackLabel, type Settings, type Verdict } from './shared.ts';
+import { POSTS, COMMENTS, EXCLUDED, containsPromoted, feedSortControl, postAgeDays, postLines, postSource, postText, sidebarModules, replyNodes, replyText, videoRecommendationSections, jobRecommendationSections } from './dom.ts';
 
 type Base = { revealed: boolean; host: HTMLElement; signature: string };
 type Reply = Base & { text: string; verdict?: Verdict; visible: boolean; pending: boolean; failed: boolean; saving?: boolean; error?: string; feedbackGeneration: number };
-type Post = Base & { promoted: boolean; old: boolean };
+type Post = Base & { reason: string };
 const replies = new Map<HTMLElement, Reply>();
 const posts = new Map<HTMLElement, Post>();
 const videoSections = new Set<HTMLElement>();
 const jobSections = new Set<HTMLElement>();
+const sidebarSections = new Set<HTMLElement>();
 let config: Settings = DEFAULTS;
 let running = false;
 let workerCompatible = false;
+// Reply checking is optional: it needs a TypeSafe key in the popup or a paired companion.
+let aiReady = false;
 const supported = () => /^\/(feed(?:\/|$)|posts\/|in\/)/.test(location.pathname);
-// The age rule is for the feed only; a post or profile opened on purpose stays as it is.
+// Everything but the promoted rule is for the feed only; a post or profile opened on purpose stays as it is.
 const feed = () => /^\/feed(?:\/|$)/.test(location.pathname);
-const isOld = (root: HTMLElement) => feed() && (postAgeDays(root) ?? 0) >= config.maxPostAgeDays;
+// The first active rule a post matches, worded for its bar; empty when it should stay.
+function postReason(root: HTMLElement): string {
+  if (config.hidePromoted && containsPromoted(root)) return 'Contains “promoted”';
+  if (!feed()) return '';
+  const source = config.hideSuggested || config.hideActivity ? postSource(root) : undefined;
+  if (source === 'suggested' && config.hideSuggested) return 'Suggested post';
+  if (source === 'activity' && config.hideActivity) return 'Shown for someone else’s activity';
+  if (config.hideOldPosts && (postAgeDays(root) ?? 0) >= config.maxPostAgeDays) return `Older than ${config.maxPostAgeDays} days`;
+  const muted = config.muteWords.length ? mutedWord(postText(root), config.muteWords) : undefined;
+  if (muted) return `Contains muted word “${muted}”`;
+  if (config.hideBait && engagementBait(postLines(root))) return 'Engagement-bait format';
+  return '';
+}
 const styles = `:host{display:block;font:12px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#385247}:host([hidden]){display:none!important}*{box-sizing:border-box}.bar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0}.post{padding:10px 14px}span{font-weight:500}button{font:600 12px "Segoe UI",sans-serif;cursor:pointer;background:transparent;color:#315d48;border:1px solid #cedbd1;border-radius:6px;padding:5px 9px;white-space:nowrap}button:hover{background:#edf4ed}button:focus-visible{outline:2px solid #315d48;outline-offset:3px}`;
 const observer = new IntersectionObserver(entries => {
   for (const entry of entries) { const record = replies.get(entry.target as HTMLElement); if (record) record.visible = entry.isIntersecting; }
@@ -44,16 +59,17 @@ function render(record: Base, show: boolean, hide: boolean, kind: 'post' | 'repl
   bar.append(label, button); shadow.append(style, bar);
 }
 function paintPost(root: HTMLElement, record: Post) {
-  const promoted = record.promoted && config.hidePromoted;
-  const show = config.enabled && supported() && (promoted || (record.old && config.hideOldPosts));
+  const show = config.enabled && supported() && Boolean(record.reason);
   const hide = show && !record.revealed;
   root.classList.toggle('qf-collapsed', hide);
   if (show && record.host.parentElement !== root) root.prepend(record.host);
-  render(record, show, hide, 'post', promoted ? 'Contains “promoted”' : `Older than ${config.maxPostAgeDays} days`, () => { record.revealed = !record.revealed; paintPost(root, record); });
+  render(record, show, hide, 'post', record.reason, () => { record.revealed = !record.revealed; paintPost(root, record); });
 }
-// The two post rules, switchable in the feed itself beneath LinkedIn's Sort by control.
+// The post rules, switchable in the feed itself beneath LinkedIn's Sort by control.
 const filterHost = newHost('post'); filterHost.classList.add('qf-filter-host');
-let filters: { promoted: HTMLInputElement; old: HTMLInputElement; days: HTMLSelectElement; error: HTMLElement } | undefined;
+type FilterSwitch = Exclude<typeof FEED_FILTER_KEYS[number], 'maxPostAgeDays'>;
+const FILTER_SWITCHES: [FilterSwitch, string][] = [['hidePromoted', 'Contains “promoted”'], ['hideSuggested', 'Suggested'], ['hideActivity', 'Others’ activity'], ['hideBait', 'Engagement bait'], ['hideOldPosts', 'Older than']];
+let filters: { boxes: [FilterSwitch, HTMLInputElement][]; days: HTMLSelectElement; error: HTMLElement } | undefined;
 let filterError = '';
 let filterSaves = 0;
 let realClick = false;
@@ -65,7 +81,7 @@ function paintFilters() {
   if (filterHost.parentElement !== row) row.append(filterHost);
   if (!filters) {
     const style = document.createElement('style');
-    style.textContent = styles + '.filters{display:inline-flex;flex-wrap:wrap;align-items:center;gap:6px 16px;margin:10px 0 2px;padding:8px 12px;background:#fff;border:1px solid #dfe5dc;border-radius:8px}.title{display:inline-flex;align-items:center;gap:8px;font-weight:600}.mark{display:grid;place-items:center;width:20px;height:20px;border-radius:6px;background:#224b3d;color:#eff8ea;font-size:14px;font-weight:700;letter-spacing:-1px;line-height:1;padding:0 2px 2px 0}.error{display:block;margin:4px 2px 0;color:#8a402a;font-size:11px}.error:empty{display:none}label{display:inline-flex;align-items:center;gap:6px;cursor:pointer}input{margin:0;accent-color:#315d48}select{font:inherit;color:inherit;background:transparent;border:1px solid #cedbd1;border-radius:6px;padding:3px 5px;cursor:pointer}input:focus-visible,select:focus-visible{outline:2px solid #315d48;outline-offset:2px}';
+    style.textContent = styles + '.filters{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px;margin:10px 0 2px;padding:8px 12px;background:#fff;border:1px solid #dfe5dc;border-radius:8px}.title{display:inline-flex;align-items:center;gap:8px;font-weight:600}.mark{display:grid;place-items:center;width:20px;height:20px;border-radius:6px;background:#224b3d;color:#eff8ea;font-size:14px;font-weight:700;letter-spacing:-1px;line-height:1;padding:0 2px 2px 0}.error{display:block;margin:4px 2px 0;color:#8a402a;font-size:11px}.error:empty{display:none}label{display:inline-flex;align-items:center;gap:6px;cursor:pointer}input{margin:0;accent-color:#315d48}select{font:inherit;color:inherit;background:transparent;border:1px solid #cedbd1;border-radius:6px;padding:3px 5px;cursor:pointer}input:focus-visible,select:focus-visible{outline:2px solid #315d48;outline-offset:2px}';
     const bar = document.createElement('div'); bar.className = 'filters'; bar.setAttribute('role', 'group'); bar.setAttribute('aria-label', 'Quiet Feed post filters');
     const title = document.createElement('span'); title.className = 'title';
     const mark = document.createElement('span'); mark.className = 'mark'; mark.setAttribute('aria-hidden', 'true'); mark.textContent = 'q.';
@@ -76,17 +92,17 @@ function paintFilters() {
       const label = document.createElement('label'), input = document.createElement('input');
       input.type = 'checkbox'; label.append(input, text); return { label, input };
     };
-    const promoted = check('Contains “promoted”'), old = check('Older than');
+    const switches = FILTER_SWITCHES.map(([key, text]) => ({ key, ...check(text) }));
     const days = document.createElement('select'); days.setAttribute('aria-label', 'Post age');
     for (const value of POST_AGE_OPTIONS) days.add(new Option(`${value} days`, String(value)));
-    old.label.append(days);
-    filters = { promoted: promoted.input, old: old.input, days, error };
-    for (const control of [promoted.input, old.input, days]) control.addEventListener('change', changeFilters);
+    switches.at(-1)!.label.append(days);
+    filters = { boxes: switches.map(item => [item.key, item.input]), days, error };
+    for (const control of [...switches.map(item => item.input), days]) control.addEventListener('change', changeFilters);
     // A scripted click() still fires a trusted change, so the click itself must be real.
-    for (const box of [promoted.input, old.input]) box.addEventListener('click', event => { realClick = event.isTrusted; });
-    bar.append(title, promoted.label, old.label); filterHost.shadowRoot!.append(style, bar, error);
+    for (const { input } of switches) input.addEventListener('click', event => { realClick = event.isTrusted; });
+    bar.append(title, ...switches.map(item => item.label)); filterHost.shadowRoot!.append(style, bar, error);
   }
-  filters.promoted.checked = config.hidePromoted; filters.old.checked = config.hideOldPosts;
+  for (const [key, box] of filters.boxes) box.checked = config[key];
   filters.days.value = String(config.maxPostAgeDays); filters.error.textContent = filterError;
 }
 function changeFilters(event: Event) {
@@ -94,7 +110,8 @@ function changeFilters(event: Event) {
   const real = event.isTrusted && (event.target instanceof HTMLSelectElement || realClick);
   realClick = false;
   if (!real || !filters) return scan();
-  const patch = { hidePromoted: filters.promoted.checked, hideOldPosts: filters.old.checked, maxPostAgeDays: Number(filters.days.value) };
+  const patch: Partial<Settings> = { maxPostAgeDays: Number(filters.days.value) };
+  for (const [key, box] of filters.boxes) patch[key] = box.checked;
   // Apply at once so a rescan can never snap the choice back while the save is in flight.
   config = cleanSettings({ ...config, ...patch }); filterError = ''; scan();
   void saveFilters(patch);
@@ -110,7 +127,7 @@ async function saveFilters(patch: Partial<Settings>) {
   } finally { filterSaves--; paintFilters(); }
 }
 function paintReply(body: HTMLElement, record: Reply) {
-  const active = config.enabled && supported() && workerCompatible;
+  const active = config.enabled && supported() && workerCompatible && aiReady;
   const matched = Boolean(record.verdict && flagged(record.verdict));
   const hide = active && matched && !record.revealed;
   record.host.classList.toggle('qf-optional-feedback', !matched && !record.verdict?.manualDecision);
@@ -168,6 +185,13 @@ function scan() {
   for (const section of currentJobSections) {
     jobSections.add(section); section.classList.toggle('qf-jobs-hidden', config.enabled && config.hideRecommendedJobs);
   }
+  const currentSidebar = new Set(feed() ? sidebarModules() : []);
+  for (const section of sidebarSections) {
+    if (!currentSidebar.has(section)) { section.classList.remove('qf-sidebar-hidden'); sidebarSections.delete(section); }
+  }
+  for (const section of currentSidebar) {
+    sidebarSections.add(section); section.classList.toggle('qf-sidebar-hidden', config.enabled && config.hideSidebar);
+  }
   const currentVideoSections = new Set(supported() ? videoRecommendationSections() : []);
   for (const section of videoSections) {
     if (!currentVideoSections.has(section)) { section.classList.remove('qf-videos-hidden'); videoSections.delete(section); }
@@ -182,15 +206,15 @@ function scan() {
   }
   for (const [root, record] of posts) {
     if (!root.isConnected) { record.host.remove(); posts.delete(root); continue; }
-    const promoted = containsPromoted(root), old = isOld(root);
-    if (promoted !== record.promoted || old !== record.old) { record.promoted = promoted; record.old = old; record.revealed = false; }
+    const reason = postReason(root);
+    if (reason !== record.reason) { record.reason = reason; record.revealed = false; }
     paintPost(root, record);
   }
   for (const root of document.querySelectorAll<HTMLElement>(POSTS)) {
     if (posts.has(root) || root.parentElement?.closest(POSTS) || !root.closest('main') || root.closest(EXCLUDED)) continue;
-    const promoted = containsPromoted(root), old = isOld(root);
-    if (!promoted && !old) continue;
-    const record: Post = { promoted, old, revealed: false, host: newHost('post'), signature: '' };
+    const reason = postReason(root);
+    if (!reason) continue;
+    const record: Post = { reason, revealed: false, host: newHost('post'), signature: '' };
     posts.set(root, record); paintPost(root, record);
   }
   for (const [body, record] of replies) {
@@ -212,7 +236,7 @@ function scan() {
   void processQueue();
 }
 async function processQueue() {
-  if (running || !config.enabled || !supported() || !workerCompatible) return;
+  if (running || !config.enabled || !supported() || !workerCompatible || !aiReady) return;
   running = true;
   try {
     for (const [body, record] of replies) {
@@ -240,7 +264,7 @@ chrome.runtime.onMessage.addListener(message => {
     for (const record of replies.values()) record.failed = false;
     scan();
   }
-  if (message.type === 'retry') { for (const record of replies.values()) record.failed = false; scan(); }
+  if (message.type === 'retry') { aiReady = Boolean(message.aiReady); for (const record of replies.values()) record.failed = false; scan(); }
   if (message.type === 'feedbackChanged') {
     for (const [body, record] of replies) if (record.text === message.text && replyText(body) === message.text) {
       record.feedbackGeneration++; record.verdict = { manualDecision: message.label, feedbackRevision: message.revision }; record.revealed = false; record.failed = false; paintReply(body, record);
@@ -258,7 +282,7 @@ const mutations = new MutationObserver(changes => {
 });
 void chrome.runtime.sendMessage({ type: 'settings' }).then(response => {
   if (response?.settings) config = cleanSettings(response.settings);
-  workerCompatible = response?.build === BUILD_VERSION;
+  workerCompatible = response?.build === BUILD_VERSION; aiReady = Boolean(response?.aiReady);
   document.documentElement.dataset.quietFeedBuild = BUILD_VERSION;
   document.documentElement.dataset.quietFeedWorkerBuild = response?.build || 'legacy';
   mutations.observe(document.body, { childList: true, subtree: true, characterData: true }); scan();

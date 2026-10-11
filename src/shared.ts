@@ -1,4 +1,6 @@
 export const API = 'http://127.0.0.1:43127';
+export const TYPESAFE = 'https://api.typesafe.ai';
+export const DAILY_LIMIT = 500;
 declare const __QUIET_FEED_BUILD__: string;
 export const BUILD_VERSION = typeof __QUIET_FEED_BUILD__ === 'undefined' ? 'source' : __QUIET_FEED_BUILD__;
 export const VERSION = '2026-09-18-feedback-v3';
@@ -13,12 +15,34 @@ export type FeedbackExample = { text: string; label: FeedbackLabel };
 export type FeedbackIndex = { revision: number; potentialAI: number; kept: number; decisions: Record<string, FeedbackLabel> };
 export const EMPTY_FEEDBACK: FeedbackIndex = { revision: 0, potentialAI: 0, kept: 0, decisions: {} };
 export type Verdict = { signals?: Signals; model?: string; cached?: boolean; skipped?: boolean; manualDecision?: FeedbackLabel; feedbackRevision?: number };
-export type Settings = { enabled: boolean; limit: number; hideRecommendedJobs: boolean; hidePromoted: boolean; hideOldPosts: boolean; maxPostAgeDays: number };
+export type Settings = { enabled: boolean; limit: number; hideRecommendedJobs: boolean; hideSidebar: boolean; hidePromoted: boolean; hideSuggested: boolean; hideActivity: boolean; hideBait: boolean; hideOldPosts: boolean; maxPostAgeDays: number; muteWords: string[] };
 // Ages offered beside LinkedIn's Sort by control; a post stamped that many days ago or more counts as old.
 export const POST_AGE_OPTIONS = [7, 14, 30, 90];
-export const DEFAULTS: Settings = { enabled: true, limit: 100, hideRecommendedJobs: true, hidePromoted: true, hideOldPosts: true, maxPostAgeDays: 7 };
+export const DEFAULTS: Settings = { enabled: true, limit: 100, hideRecommendedJobs: true, hideSidebar: false, hidePromoted: true, hideSuggested: true, hideActivity: true, hideBait: false, hideOldPosts: true, maxPostAgeDays: 7, muteWords: [] };
 // The only settings the LinkedIn page itself may change, from its feed filter row.
-export const FEED_FILTER_KEYS = ['hidePromoted', 'hideOldPosts', 'maxPostAgeDays'] as const;
+export const FEED_FILTER_KEYS = ['hidePromoted', 'hideSuggested', 'hideActivity', 'hideBait', 'hideOldPosts', 'maxPostAgeDays'] as const;
+export const MAX_MUTE_WORDS = 50;
+// Mute words arrive as an array or as the popup's comma-separated text.
+export function cleanMuteWords(value: unknown): string[] {
+  const items = Array.isArray(value) ? value : typeof value === 'string' ? value.split(/[,\n]/) : [];
+  const words = items.filter(item => typeof item === 'string').map(item => normalise(item).toLowerCase().slice(0, 40)).filter(Boolean);
+  return [...new Set(words)].slice(0, MAX_MUTE_WORDS);
+}
+// The first muted word or phrase found as a whole word, so "art" never matches "start".
+export function mutedWord(text: string, words: string[]): string | undefined {
+  const haystack = normalise(text).toLowerCase();
+  return words.find(word => new RegExp(`(?<![\\p{L}\\p{N}])${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\p{N}])`, 'u').test(haystack));
+}
+// A fallible format check, never a judgement of the author: a long run of short,
+// double-spaced one-liners that closes on a question or a call to respond.
+export function engagementBait(lines: string[]): boolean {
+  const written = lines.map(normalise).filter(line => line && !/^(#[\p{L}\p{N}_]+\s*)+$/u.test(line));
+  if (written.length < 8) return false;
+  const short = written.filter(line => line.length <= 110).length;
+  const blank = lines.filter(line => !normalise(line)).length;
+  const hook = written.slice(-3).some(line => /\?/.test(line) || /\b(agree|thoughts|comment|repost|follow me|share this|what do you think|let me know|dm me|link in (the )?comments)\b/i.test(line));
+  return short / written.length >= 0.8 && blank >= written.length * 0.6 && hook;
+}
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 const UNIT_DAYS: Record<string, number> = { s: 0, second: 0, m: 0, minute: 0, h: 0, hour: 0, d: 1, day: 1, w: 7, week: 7, mo: 30, month: 30, yr: 365, y: 365, year: 365 };
 export function normalise(text: string): string { return text.replace(/\s+/g, ' ').trim(); }
@@ -48,7 +72,12 @@ export function cleanSettings(value: Partial<Settings> = {}): Settings {
   return {
     enabled: typeof value.enabled === 'boolean' ? value.enabled : DEFAULTS.enabled,
     hideRecommendedJobs: typeof value.hideRecommendedJobs === 'boolean' ? value.hideRecommendedJobs : DEFAULTS.hideRecommendedJobs,
+    hideSidebar: typeof value.hideSidebar === 'boolean' ? value.hideSidebar : DEFAULTS.hideSidebar,
     hidePromoted: typeof value.hidePromoted === 'boolean' ? value.hidePromoted : DEFAULTS.hidePromoted,
+    hideSuggested: typeof value.hideSuggested === 'boolean' ? value.hideSuggested : DEFAULTS.hideSuggested,
+    hideActivity: typeof value.hideActivity === 'boolean' ? value.hideActivity : DEFAULTS.hideActivity,
+    hideBait: typeof value.hideBait === 'boolean' ? value.hideBait : DEFAULTS.hideBait,
+    muteWords: cleanMuteWords(value.muteWords),
     hideOldPosts: typeof value.hideOldPosts === 'boolean' ? value.hideOldPosts : DEFAULTS.hideOldPosts,
     maxPostAgeDays: POST_AGE_OPTIONS.includes(value.maxPostAgeDays as number) ? value.maxPostAgeDays as number : DEFAULTS.maxPostAgeDays,
     limit: typeof value.limit === 'number' && Number.isFinite(value.limit)

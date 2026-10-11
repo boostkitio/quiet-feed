@@ -63,6 +63,7 @@ try {
   assert.equal(await popup.locator('input[type=range]').count(), 0);
   assert.equal(await popup.locator('input[name=mode]').count(), 0);
   assert.equal(await popup.getByText('Replies Checked', { exact: true }).count(), 1);
+  await popup.locator('#connection').getByText('Filtering Posts', { exact: true }).waitFor();
   const page = await context.newPage(); await page.goto('https://www.linkedin.com/feed/');
   for (const post of ['promoted-legacy', 'promoted-sdui', 'promoted-image', 'promoted-body']) await page.locator(`#${post}.qf-collapsed`).waitFor();
   for (const section of ['videos-legacy', 'videos-sdui']) await page.locator(`#${section}.qf-videos-hidden`).waitFor({ state: 'attached' });
@@ -179,6 +180,40 @@ try {
   await popup.locator('#hideOldPosts').check();
   await page.locator('#old-legacy.qf-collapsed').waitFor();
   assert.equal(analysed.length,0,'age filtering needs no pairing or AI calls');
+  // Suggested posts and posts shown for someone else's activity collapse by their header label.
+  for (const [post, label] of [['suggested-sdui', 'Suggested post'], ['activity-sdui', 'Shown for someone else’s activity'], ['activity-legacy', 'Shown for someone else’s activity']]) await page.locator(`#${post}.qf-collapsed`).getByText(label, { exact: true }).waitFor();
+  for (const post of ['loves-mention', 'bait-post', 'list-post', 'muted-post', 'muted-partial']) assert.equal(await page.locator(`#${post}.qf-collapsed`).count(), 0, `${post} stays by default`);
+  const suggestedBox = filters.getByRole('checkbox', { name: 'Suggested', exact: true }), activityBox = filters.getByRole('checkbox', { name: 'Others’ activity' }), baitBox = filters.getByRole('checkbox', { name: 'Engagement bait' });
+  assert.deepEqual([await suggestedBox.isChecked(), await activityBox.isChecked(), await baitBox.isChecked()], [true, true, false]);
+  await suggestedBox.uncheck();
+  assert.deepEqual([await page.locator('#suggested-sdui.qf-collapsed').count(), await page.locator('#activity-sdui.qf-collapsed').count()], [0, 1]);
+  await suggestedBox.check(); await activityBox.uncheck();
+  assert.deepEqual([await page.locator('#suggested-sdui.qf-collapsed').count(), await page.locator('#activity-sdui.qf-collapsed, #activity-legacy.qf-collapsed').count()], [1, 0]);
+  await activityBox.check();
+  // The format check is off until asked for, and judges layout only.
+  await baitBox.check();
+  await page.locator('#bait-post.qf-collapsed').getByText('Engagement-bait format', { exact: true }).waitFor();
+  for (const post of ['list-post', 'original', 'loves-mention']) assert.equal(await page.locator(`#${post}.qf-collapsed`).count(), 0);
+  await baitBox.uncheck();
+  assert.equal(await page.locator('#bait-post.qf-collapsed').count(), 0);
+  // Mute words and the right-rail switch live in the popup; the page cannot set them.
+  await popup.reload();
+  await popup.locator('#muteWords').fill('Webinar, crypto'); await popup.locator('#muteWords').blur();
+  await page.locator('#muted-post.qf-collapsed').getByText('Contains muted word “webinar”', { exact: true }).waitFor();
+  assert.equal(await page.locator('#muted-partial.qf-collapsed').count(), 0, 'a muted word matches whole words only');
+  assert.deepEqual((await worker.evaluate(() => chrome.storage.local.get('settings'))).settings.muteWords, ['webinar', 'crypto']);
+  await suggestedBox.uncheck(); await suggestedBox.check();
+  assert.deepEqual((await worker.evaluate(() => chrome.storage.local.get('settings'))).settings.muteWords, ['webinar', 'crypto'], 'the feed row leaves mute words alone');
+  await popup.locator('#muteWords').fill(''); await popup.locator('#muteWords').blur();
+  await page.waitForFunction(() => !document.querySelector('#muted-post.qf-collapsed'));
+  assert.equal(await page.locator('#rail-news').isVisible(), true, 'the right rail is untouched by default');
+  await popup.locator('#hideSidebar').check();
+  for (const module of ['rail-news', 'rail-puzzles']) await page.locator(`#${module}`).waitFor({ state: 'hidden' });
+  assert.equal(await page.locator('#rail-footer').isVisible(), true, 'only the named modules go');
+  await popup.locator('#hideSidebar').uncheck();
+  await page.locator('#rail-puzzles').waitFor({ state: 'visible' });
+  assert.equal(await page.locator('.qf-reply-host:not([hidden])').count(), 0, 'reply controls wait for a key or companion');
+  assert.equal(analysed.length,0,'the new post filters need no pairing or AI calls');
   // Reproduce the real failure: unpaired/stale pairing attempts must not spend
   // the browser allowance when no inference request has reached the companion.
   for (let n = 0; n < 30; n++) {
@@ -348,5 +383,5 @@ try {
   await recoveredPage.locator('#ai-body.qf-reply-collapsed').waitFor({ state: 'attached' });
   assert.equal(await worker.evaluate(() => chrome.storage.local.get('token').then(data => data.token === 'b'.repeat(48))), true, 'reload repairs the stale pairing before filtering');
   assert.equal(await recoveredPage.evaluate(async url => { try { return (await fetch(url)).ok; } catch { return false; } }, `chrome-extension://${id}/local-connection.json`), false, 'websites cannot read the local pairing file');
-  console.log(JSON.stringify({ passed: true, fixtureRequests: analysed.length, checks: ['original posts never analysed or labelled', 'legacy and SDUI comments', 'nested replies preserved and independently filtered', 'short AI-style replies', 'duplicate-wrapper and text-cache deduplication', 'edit and stale-response handling', 'dynamic loading', 'show/hide reply', 'pause restores content and clears UI', 'no slider or Why This Result', 'promoted posts preserved', 'draft/message exclusion', 'API failures fail open', 'budget and reset', 'legacy settings migration', 'posts a week or older collapsed and revealable on the feed only', 'recent, recently reposted and undated posts preserved', 'older-posts toggle persists', 'feed filter row beneath Sort by: promoted and age switches, 7/14/30/90 day choice saved', 'synthetic page events cannot change filters', 'legacy/SDUI/dynamic Videos for you modules removed', 'video-title mentions and neighbouring posts preserved', 'video section restored on pause or title change', 'missing and rejected pairing never consume allowance', 'automatic recovery from stale pairing', 'automatic connection after browser restart', 'local pairing file inaccessible to websites', 'trusted-click feedback only', 'short reply flags persist across reloads', 'keep corrections override model flags', 'future replies use saved preferences', 'late inference cannot override feedback', 'reset learning clears decisions'] }, null, 2));
+  console.log(JSON.stringify({ passed: true, fixtureRequests: analysed.length, checks: ['original posts never analysed or labelled', 'legacy and SDUI comments', 'nested replies preserved and independently filtered', 'short AI-style replies', 'duplicate-wrapper and text-cache deduplication', 'edit and stale-response handling', 'dynamic loading', 'show/hide reply', 'pause restores content and clears UI', 'no slider or Why This Result', 'promoted posts preserved', 'draft/message exclusion', 'API failures fail open', 'budget and reset', 'legacy settings migration', 'posts a week or older collapsed and revealable on the feed only', 'recent, recently reposted and undated posts preserved', 'older-posts toggle persists', 'feed filter row beneath Sort by: promoted and age switches, 7/14/30/90 day choice saved', 'synthetic page events cannot change filters', 'suggested and activity posts collapsed by header label', 'engagement-bait format opt-in', 'whole-word mute words', 'News and Puzzles modules removable', 'post filters work with no companion', 'legacy/SDUI/dynamic Videos for you modules removed', 'video-title mentions and neighbouring posts preserved', 'video section restored on pause or title change', 'missing and rejected pairing never consume allowance', 'automatic recovery from stale pairing', 'automatic connection after browser restart', 'local pairing file inaccessible to websites', 'trusted-click feedback only', 'short reply flags persist across reloads', 'keep corrections override model flags', 'future replies use saved preferences', 'late inference cannot override feedback', 'reset learning clears decisions'] }, null, 2));
 } finally { await context?.close(); await new Promise(resolve => server.close(resolve)); }

@@ -34,6 +34,58 @@ export function postAgeDays(root: HTMLElement, now = new Date()): number | undef
   }
   return newest;
 }
+// Why LinkedIn put a card in the feed, read from the label above its author:
+// "Suggested", or a line such as "Name celebrates this" or "Name follows this page".
+const SUGGESTED = /^(suggested|suggested for you|recommended for you)$/i;
+const ACTIVITY = /(?:^| )(?:(?:likes?|loves?|celebrates?|supports?|reacted to|commented on) this|finds? this (?:insightful|funny)|replied to (?:this|.{1,40} comment)|follows? this page)$/i;
+export function postSource(root: HTMLElement): 'suggested' | 'activity' | undefined {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  // The label sits in the first few pieces of text; later matches are link previews, not labels.
+  for (let node = walker.nextNode(), seen = 0; node && seen < 8; node = walker.nextNode()) {
+    const text = normalise(node.textContent || '');
+    if (!text || node.parentElement?.closest('.qf-host, script, style')) continue;
+    seen++;
+    if (node.parentElement?.closest(`${COMMENT_SECTIONS}, ${EXCLUDED}, ${POST_BODY}`)) continue;
+    if (SUGGESTED.test(text)) return 'suggested';
+    const line = normalise(node.parentElement?.parentElement?.textContent || '');
+    if (ACTIVITY.test(text) || (line.length <= 90 && ACTIVITY.test(line))) return 'activity';
+  }
+  return undefined;
+}
+// A card's own words, without its comments: the whole text for mute words, and
+// the body's lines (LinkedIn keeps the full text in the page, split by <br>) for format checks.
+export function postText(root: HTMLElement): string {
+  const clone = root.cloneNode(true) as HTMLElement;
+  clone.querySelectorAll(`${COMMENT_SECTIONS}, .qf-host, .qf-reply-host, script, style, template`).forEach(el => el.remove());
+  return normalise(clone.textContent || '');
+}
+export function postLines(root: HTMLElement): string[] {
+  const body = [...root.querySelectorAll<HTMLElement>(POST_BODY)].find(el => !el.closest(`${COMMENT_SECTIONS}, ${EXCLUDED}`));
+  if (!body) return [];
+  const clone = body.cloneNode(true) as HTMLElement;
+  clone.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
+  clone.querySelectorAll('p, div, li').forEach(block => block.append('\n'));
+  return (clone.textContent || '').split('\n').map(normalise);
+}
+// Right-rail modules, matched by exact title and bounded so the rest of the rail stays.
+const SIDEBAR_TITLES = ['linkedin news', "today's puzzles", 'add to your feed'];
+export function sidebarModules(): HTMLElement[] {
+  const modules = new Set<HTMLElement>();
+  for (const label of document.querySelectorAll<HTMLElement>('aside h2, aside h3, aside [role="heading"], aside p, aside span')) {
+    const title = normalise(label.textContent || '').toLowerCase().replace(/’/g, "'");
+    if (!SIDEBAR_TITLES.includes(title) || label.closest(EXCLUDED)) continue;
+    const rail = label.closest('aside');
+    let module: HTMLElement | null = null;
+    for (let candidate = label.parentElement; candidate && candidate !== rail; candidate = candidate.parentElement) {
+      // Climb past the title row to the block, then through wrappers that hold nothing else.
+      if (!module) { if (normalise(candidate.textContent || '').length > title.length + 20) module = candidate; continue; }
+      if (candidate.children.length !== 1) break;
+      module = candidate;
+    }
+    if (module && module.parentElement !== rail && ![...modules].some(other => other.contains(module))) modules.add(module);
+  }
+  return [...modules];
+}
 // LinkedIn's own Sort by control at the top of the feed; the filter row sits beneath it.
 export function feedSortControl(): HTMLElement | null {
   for (const control of document.querySelectorAll<HTMLElement>('main button, main [role="button"]')) {

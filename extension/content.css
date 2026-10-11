@@ -4,6 +4,7 @@
 .qf-reply-host[hidden], .qf-reply-collapsed { display: none !important; }
 .qf-videos-hidden { display: none !important; }
 .qf-jobs-hidden { display: none !important; }
+.qf-sidebar-hidden { display: none !important; }
 .qf-optional-feedback { opacity: 0; }
 .qf-feedback-area:hover > .qf-optional-feedback,
 .qf-optional-feedback:focus-within { opacity: 1; }

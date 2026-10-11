@@ -35,7 +35,7 @@ try{
  const fresh=await context.newPage();await fresh.goto(`chrome-extension://${id}/popup.html`);
  const state=await fresh.evaluate(()=>chrome.runtime.sendMessage({type:'status'}));
  assert.equal(state.build,JSON.parse(await readFile('package.json','utf8')).version);
- await fresh.locator('#connection').getByText('Connect Your Companion',{exact:true}).waitFor();
+ await fresh.locator('#connection').getByText('Filtering Posts',{exact:true}).waitFor();
  await context.route('https://www.linkedin.com/**',route=>readFile('tests/feed.html','utf8').then(body=>route.fulfill({status:200,contentType:'text/html',body})));
  const currentPage=await context.newPage();await currentPage.goto('https://www.linkedin.com/feed/');
  await currentPage.waitForFunction(()=>document.documentElement.dataset.quietFeedBuild===document.documentElement.dataset.quietFeedWorkerBuild);

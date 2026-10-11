@@ -1,6 +1,6 @@
 {
   "name": "linkedin-typesafe-filter",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -13,8 +13,9 @@
     "test:browser": "node tests/browser.mjs",
     "test:update": "node tests/update.mjs",
     "test:jobs": "node tests/jobs-markup.mjs",
+    "test:direct": "node tests/direct.mjs",
     "test:mac": "node tests/mac-connect.mjs",
-    "verify": "npm run typecheck && npm test && npm run test:mac && npm run build && npm run test:browser && npm run test:update && npm run test:jobs",
+    "verify": "npm run typecheck && npm test && npm run test:mac && npm run build && npm run test:browser && npm run test:direct && npm run test:update && npm run test:jobs",
     "start": "node dist/server.mjs"
   },
   "devDependencies": {

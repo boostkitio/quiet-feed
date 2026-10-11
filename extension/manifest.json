@@ -1,13 +1,13 @@
 {
   "manifest_version": 3,
   "name": "Quiet Feed · TypeSafe For LinkedIn",
-  "description": "Hide likely AI-written LinkedIn comments and replies, plus posts containing promoted. Reveal anything with one click.",
-  "version": "0.6.1",
+  "description": "A calmer LinkedIn feed: hide promoted, suggested and old posts, mute words, and optionally AI-style replies. Reveal anything with one click.",
+  "version": "0.7.0",
   "minimum_chrome_version": "120",
   "permissions": ["storage"],
-  "host_permissions": ["http://127.0.0.1:43127/*", "https://www.linkedin.com/*"],
+  "host_permissions": ["http://127.0.0.1:43127/*", "https://api.typesafe.ai/*", "https://www.linkedin.com/*"],
   "background": { "service_worker": "background.js", "type": "module" },
   "action": { "default_popup": "popup.html", "default_title": "Quiet Feed" },
   "content_scripts": [{ "matches": ["https://www.linkedin.com/*"], "js": ["content.js"], "css": ["content.css"], "run_at": "document_idle" }],
-  "content_security_policy": { "extension_pages": "script-src 'self'; object-src 'none'; connect-src 'self' http://127.0.0.1:43127" }
+  "content_security_policy": { "extension_pages": "script-src 'self'; object-src 'none'; connect-src 'self' http://127.0.0.1:43127 https://api.typesafe.ai" }
 }

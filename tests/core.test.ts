@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import { VERSION, ageInDays, cleanSettings, flagged, makeRequest, parseVerdict } from '../src/shared.ts';
+import { VERSION, ageInDays, cleanMuteWords, cleanSettings, engagementBait, mutedWord, flagged, makeRequest, parseVerdict } from '../src/shared.ts';
 import { createApp } from '../src/server.ts';
 
 const sample = 'Concrete test post with enough text for a meaningful classification. This fixture is not real LinkedIn content and contains no private information.';
@@ -14,13 +14,31 @@ test('classification keeps formulaic writing separate from the authorship style 
   assert.equal(flagged({ ...verdict, signals: { aiStyle: .86, boilerplate: .3, disclosure: .02 } }), false);
   assert.equal(flagged({ ...verdict, signals: { aiStyle: .2, boilerplate: .1, disclosure: .99 } }), true);
   const legacy = { enabled: true, mode: 'label', threshold: .65, limit: 40 };
-  assert.deepEqual(cleanSettings(legacy), { enabled: true, limit: 40, hideRecommendedJobs: true, hidePromoted: true, hideOldPosts: true, maxPostAgeDays: 7 });
+  assert.deepEqual(cleanSettings(legacy), { enabled: true, limit: 40, hideRecommendedJobs: true, hideSidebar: false, hidePromoted: true, hideSuggested: true, hideActivity: true, hideBait: false, hideOldPosts: true, maxPostAgeDays: 7, muteWords: [] });
   assert.equal(cleanSettings({hideRecommendedJobs:false}).hideRecommendedJobs,false);
   assert.equal(cleanSettings({hideOldPosts:false}).hideOldPosts,false);
   assert.equal(cleanSettings({hidePromoted:false}).hidePromoted,false);
   assert.equal(cleanSettings({maxPostAgeDays:14}).maxPostAgeDays,14);
   for (const value of [9, 0, -7, '14', null]) assert.equal(cleanSettings({maxPostAgeDays:value as number}).maxPostAgeDays,7,'only offered ages are accepted');
   assert.equal(cleanSettings({ limit: 100000 }).limit, 500);
+});
+test('mute words are whole words or phrases; the format check needs length, spacing and a closing hook', () => {
+  assert.deepEqual(cleanMuteWords(' Webinar, crypto ,, WEBINAR,\nthought   leader '), ['webinar', 'crypto', 'thought leader']);
+  assert.deepEqual(cleanMuteWords(['a', 7, null, 'B']), ['a', 'b']);
+  assert.equal(cleanMuteWords(Array.from({ length: 80 }, (_, n) => `word${n}`)).length, 50);
+  assert.deepEqual(cleanSettings({ muteWords: 'x, y' as unknown as string[] }).muteWords, ['x', 'y']);
+  const words = ['webinar', 'thought leader', 'c++', 'art'];
+  assert.equal(mutedWord('Join our Webinar on Thursday.', words), 'webinar');
+  assert.equal(mutedWord('Every THOUGHT  LEADER says so', words), 'thought leader');
+  assert.equal(mutedWord('I still write C++ daily', words), 'c++');
+  for (const text of ['Three webinars last year', 'A fresh start for the party', '']) assert.equal(mutedWord(text, words), undefined, text);
+  const bait = ['I got fired on Monday.', '', 'Best thing that ever happened.', '', 'Here is why.', '', 'I stopped waiting.', '', 'I started building.', '', 'I found my people.', '', 'I doubled my income.', '', 'Most people never try.', '', 'Agree?', '', '#growth #mindset'];
+  assert.equal(engagementBait(bait), true);
+  assert.equal(engagementBait(bait.slice(0, 8)), false, 'too short to judge');
+  assert.equal(engagementBait(bait.filter(Boolean)), false, 'not double-spaced');
+  assert.equal(engagementBait([...bait.slice(0, 16), 'That is the whole story.']), false, 'no closing hook');
+  assert.equal(engagementBait(['We shipped the new billing system this week after four months of work across three teams, and I want to thank everyone involved in it.', '', 'What do you think?']), false);
+  assert.equal(engagementBait([]), false);
 });
 test('post date stamps become whole days; anything that is not a stamp is ignored', () => {
   const now = new Date(2026, 9, 11, 15, 30);

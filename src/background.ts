@@ -1,4 +1,4 @@
-import { API, BUILD_VERSION, DEFAULTS, EMPTY_FEEDBACK, FEED_FILTER_KEYS, MAX_TEXT, MIN_TEXT, VERSION, cleanSettings, normalise, type FeedbackIndex, type Settings, type Verdict } from './shared.ts';
+import { API, BUILD_VERSION, DAILY_LIMIT, DEFAULTS, EMPTY_FEEDBACK, FEED_FILTER_KEYS, MAX_TEXT, MIN_TEXT, TYPESAFE, VERSION, cleanSettings, makeRequest, normalise, parseVerdict, type FeedbackExample, type FeedbackIndex, type FeedbackLabel, type Settings, type Verdict } from './shared.ts';
 
 const ready = Promise.all([
   chrome.storage.local.setAccessLevel({ accessLevel: 'TRUSTED_CONTEXTS' }),
@@ -53,6 +53,56 @@ async function restoreLocalPairing(): Promise<boolean> {
     return true;
   } catch { return false; }
 }
+// Optional: the reader's own TypeSafe key, pasted into the popup. It stays in
+// trusted extension storage, is sent only to TypeSafe and is never returned to a page or the popup.
+async function directKey(): Promise<string> { return String((await chrome.storage.local.get('typesafeKey')).typesafeKey || ''); }
+async function aiReady(): Promise<boolean> { return Boolean(await directKey() || (await chrome.storage.local.get('token')).token); }
+type DirectFeedback = { revision: number; entries: (FeedbackExample & { id: string })[] };
+function directIndex(store: DirectFeedback): FeedbackIndex {
+  const count = (label: FeedbackLabel) => store.entries.filter(entry => entry.label === label).length;
+  return { revision: store.revision, potentialAI: count('potential-ai'), kept: count('keep'), decisions: Object.fromEntries(store.entries.map(entry => [entry.id, entry.label])) };
+}
+// With a key the worker does the companion's job itself: same request, limits and feedback rules.
+async function direct(key: string, path: string, body: { text?: string; label?: FeedbackLabel } = {}) {
+  const store = ((await chrome.storage.local.get('directFeedback')).directFeedback as DirectFeedback) || { revision: 0, entries: [] };
+  if (path === '/health') return { configured: true, direct: true, classifierVersion: VERSION, feedback: directIndex(store) };
+  const text = normalise(body.text || '');
+  const id = await digestText(text);
+  if (path === '/feedback' || path === '/feedback/clear') {
+    const entries = path === '/feedback' ? [...store.entries.filter(entry => entry.id !== id), { id, text, label: body.label! }].slice(-200) : [];
+    const next = { revision: store.revision + 1, entries };
+    await chrome.storage.local.set({ directFeedback: next });
+    return { feedback: directIndex(next) };
+  }
+  const decided = store.entries.find(entry => entry.id === id);
+  if (decided) return { manualDecision: decided.label, feedbackRevision: store.revision };
+  const today = new Date().toISOString().slice(0, 10);
+  const usage = (await chrome.storage.local.get('directUsage')).directUsage as { day: string; used: number } | undefined;
+  const used = usage?.day === today ? usage.used : 0;
+  // 403 marks rejections made here, before any inference, so the session allowance is refunded.
+  if (used >= DAILY_LIMIT) throw new CompanionError('Daily limit reached. Try again tomorrow.', 403);
+  if (Date.now() < Number((await chrome.storage.session.get('cooldown')).cooldown || 0)) throw new CompanionError('TypeSafe is cooling down after a rate limit. Try again in a minute.', 403);
+  await chrome.storage.local.set({ directUsage: { day: today, used: used + 1 } });
+  const examples = (['potential-ai', 'keep'] as const).flatMap(label => store.entries.filter(entry => entry.label === label).slice(-3).map(entry => ({ label, text: entry.text.slice(0, 600) })));
+  const response = await fetch(TYPESAFE + '/v1/systemone', {
+    method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(makeRequest(text, undefined, examples)), signal: AbortSignal.timeout(25000), redirect: 'error',
+  });
+  if (response.status === 429 || response.status === 529) {
+    await chrome.storage.session.set({ cooldown: Date.now() + 60000 });
+    throw new CompanionError('TypeSafe rate limit. Try again in a minute.', 503);
+  }
+  if (response.status === 401 || response.status === 403) throw new CompanionError('TypeSafe rejected the API key. Check the key in Quiet Feed.', 401);
+  if (!response.ok) throw new CompanionError(`TypeSafe request failed (HTTP ${response.status}). Replies remain visible.`, 503);
+  return { ...parseVerdict(await response.json(), examples.length > 0), feedbackRevision: store.revision };
+}
+async function backend(path: string, body?: { text?: string; label?: FeedbackLabel }) {
+  const key = await directKey();
+  if (!key) return companion(path, body);
+  const data = await direct(key, path, body);
+  if (path === '/health') await syncFeedback(data.feedback);
+  return data;
+}
 async function companion(path: string, body?: unknown) {
   let { token } = await chrome.storage.local.get('token');
   if (!token && await restoreLocalPairing()) token = (await chrome.storage.local.get('token')).token;
@@ -93,7 +143,7 @@ async function analyse(raw: string) {
   if (Number(stored.requests || 0) >= config.limit) throw new Error('Session limit reached. Reset the session in the extension to continue.');
   await chrome.storage.session.set({ requests: Number(stored.requests || 0) + 1 });
   let result: Verdict;
-  try { result = await companion('/analyse-reply-v3', { text }); }
+  try { result = await backend('/analyse-reply-v3', { text }) as Verdict; }
   catch (error) {
     // These local rejections occur before inference. Network/time-out/provider
     // failures remain counted because their upstream billing state is uncertain.
@@ -121,12 +171,12 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
   const linkedin = /^https:\/\/www\.linkedin\.com\/(feed(?:\/|$)|posts\/|in\/)/.test(source);
   const task = async () => {
     await ready;
-    if (message.type === 'settings' && (popup || linkedinHost)) return { settings: await settings(), build: BUILD_VERSION };
+    if (message.type === 'settings' && (popup || linkedinHost)) return { settings: await settings(), build: BUILD_VERSION, aiReady: await aiReady() };
     if (message.type === 'analyse' && message.kind === 'reply' && linkedin) return { verdict: await analyse(message.text) };
     if (message.type === 'feedback' && linkedin) {
       if (typeof message.text !== 'string' || !normalise(message.text) || message.text.length > MAX_TEXT || !['potential-ai','keep'].includes(message.label)) throw new Error('Invalid feedback');
       const text = normalise(message.text);
-      const result = await companion('/feedback', { text, label: message.label });
+      const result = await backend('/feedback', { text, label: message.label });
       await syncFeedback(result.feedback);
       await broadcast({ type: 'feedbackChanged', text, label: message.label, revision: result.feedback.revision });
       return { verdict: { manualDecision: message.label, feedbackRevision: result.feedback.revision }, feedback: result.feedback };
@@ -141,7 +191,7 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
       const local = await chrome.storage.local.get('token');
       const session = await chrome.storage.session.get(['analysed', 'requests', 'lastError']);
       let health = null, error = '';
-      try { health = await companion('/health'); } catch (e) { error = safeError(e); }
+      try { health = await backend('/health'); } catch (e) { error = safeError(e); }
       return { settings: await settings(), paired: Boolean(local.token), session, health, error, feedback: await feedbackIndex(), build: BUILD_VERSION };
     }
     if (message.type === 'save') return { settings: await saveSettings(message.settings) };
@@ -154,13 +204,28 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
       await retryTabs();
       return { ok: true };
     }
+    if (message.type === 'saveKey') {
+      const key = typeof message.key === 'string' ? message.key.trim() : '';
+      if (!/^[A-Za-z0-9_.\-]{16,200}$/.test(key)) throw new Error('Invalid TypeSafe key. Copy the whole key from your TypeSafe account.');
+      await chrome.storage.local.set({ typesafeKey: key });
+      await chrome.storage.session.set({ cache: {}, lastError: '' });
+      await backend('/health');
+      await retryTabs();
+      return { ok: true };
+    }
+    if (message.type === 'removeKey') {
+      await chrome.storage.local.remove('typesafeKey');
+      await chrome.storage.session.set({ cache: {}, lastError: '' });
+      await retryTabs();
+      return { ok: true };
+    }
     if (message.type === 'reset') {
       await chrome.storage.session.set({ analysed: 0, requests: 0, lastError: '' });
       await retryTabs();
       return { ok: true };
     }
     if (message.type === 'clearFeedback') {
-      const result = await companion('/feedback/clear', {});
+      const result = await backend('/feedback/clear', {});
       await syncFeedback(result.feedback);
       await broadcast({ type: 'feedbackReset' });
       return { feedback: result.feedback };
@@ -178,7 +243,7 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
   return true;
 });
 async function retryTabs() {
-  await broadcast({ type: 'retry' });
+  await broadcast({ type: 'retry', aiReady: await aiReady() });
 }
 async function broadcast(message: unknown) {
   for (const tab of await chrome.tabs.query({ url: 'https://www.linkedin.com/*' })) {

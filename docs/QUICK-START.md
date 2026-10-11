@@ -1,4 +1,6 @@
-# Quiet Feed · Comments And Replies
+# Quiet Feed · Windows Companion Package
+
+Most people only need the extension-only download and its three-step **INSTALL.md**. This package adds a companion that keeps your TypeSafe key outside the browser and starts with Windows.
 
 Quiet Feed now focuses on **AI-written comments and replies**. Original posts stay as they are, except posts containing **promoted**, which still hide automatically.
 
@@ -9,6 +11,8 @@ The **Videos for you** recommendation section is also removed automatically, wit
 **Hide Older Posts** is on by default. Feed posts older than your chosen age (7 days unless you change it) collapse to **Older than 7 days / Show Post**, using the date LinkedIn prints on each post and today's date. It works without TypeSafe. Posts reposted this week, posts with no date, and a post or profile you open directly are left alone.
 
 On the feed, a **Quiet Feed hides:** row sits just beneath LinkedIn's **Sort by** control. Use it to switch **Contains “promoted”** and **Older than** on or off and to choose 7, 14, 30 or 90 days. Changes apply straight away and are remembered.
+
+The feed row also switches **Suggested** posts, posts shown for **Others’ activity** (for example “Name celebrates this”) and, off by default, **Engagement bait** formatting. In the popup, **Mute Words** collapses posts containing words you list, matched as whole words, and **Hide News & Puzzles** clears those panels from the right-hand column.
 
 There is no threshold slider and no **Why This Result** box. Suspected AI reply text collapses to **Likely AI Reply / Show Reply**. Its author and any nested discussion stay available. Other replies retain a small feedback control.
 
@@ -24,7 +28,7 @@ Up to 200 choices are saved locally. A few saved examples are sent to TypeSafe a
 ## Activate An Update
 
 1. Stop the old companion using **Stop Quiet Feed.cmd**.
-2. Extract all files from **Quiet-Feed-0.6.1.zip** over your existing installation. Keep its private connection file.
+2. Extract all files from **Quiet-Feed-0.7.0.zip** over your existing installation. Keep its private connection file.
 3. Run **Start Quiet Feed.cmd** again.
 4. Open `chrome://extensions`, click **Reload** on **Quiet Feed**, then refresh LinkedIn.
 
@@ -48,10 +52,10 @@ If the popup says **Update Ready**, open `chrome://extensions`, click the **Relo
 - **Hide Older Posts** collapses or restores feed posts past your chosen age, independently of the other filter choices.
 - **Quiet Feed hides:** (on the feed, beneath Sort by) switches the promoted and age rules and sets the age.
 
-- **Filter Comments & Replies** pauses or resumes all filtering, including promoted posts, older posts and Videos for you.
+- **Quiet My Feed** pauses or resumes all filtering, including promoted posts, older posts and Videos for you.
 - **Show Reply / Hide Reply** reveals or collapses an individual reply's text.
 - **Show Post / Hide Post** reveals or collapses a post containing “promoted” or one older than your chosen age.
-- **Connection & Limits** holds pairing settings and the session request budget, initially 100.
+- **AI Reply Filter** holds the optional TypeSafe key field, pairing settings and the session request budget, initially 100. Leave the key field empty when you use this companion.
 - **Reset Session & Retry** allows more requests and retries failures. TypeSafe account usage charges apply.
 
 Only loaded reply text is sent to TypeSafe. Private messages and text in editors are excluded. Jev automatically checks all loaded nonempty replies, including short ones, up to 4,000 characters each. Images and videos are not analysed. AI detection remains imperfect, so you can always reveal a reply.
