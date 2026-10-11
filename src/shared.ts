@@ -13,13 +13,40 @@ export type FeedbackExample = { text: string; label: FeedbackLabel };
 export type FeedbackIndex = { revision: number; potentialAI: number; kept: number; decisions: Record<string, FeedbackLabel> };
 export const EMPTY_FEEDBACK: FeedbackIndex = { revision: 0, potentialAI: 0, kept: 0, decisions: {} };
 export type Verdict = { signals?: Signals; model?: string; cached?: boolean; skipped?: boolean; manualDecision?: FeedbackLabel; feedbackRevision?: number };
-export type Settings = { enabled: boolean; limit: number; hideRecommendedJobs: boolean };
-export const DEFAULTS: Settings = { enabled: true, limit: 100, hideRecommendedJobs: true };
+export type Settings = { enabled: boolean; limit: number; hideRecommendedJobs: boolean; hideOldPosts: boolean };
+export const DEFAULTS: Settings = { enabled: true, limit: 100, hideRecommendedJobs: true, hideOldPosts: true };
+// Fixed age rule: a post stamped a week or more ago counts as old.
+export const MAX_POST_AGE_DAYS = 7;
+const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+const UNIT_DAYS: Record<string, number> = { s: 0, second: 0, m: 0, minute: 0, h: 0, hour: 0, d: 1, day: 1, w: 7, week: 7, mo: 30, month: 30, yr: 365, y: 365, year: 365 };
 export function normalise(text: string): string { return text.replace(/\s+/g, ' ').trim(); }
+// Whole days since a LinkedIn date stamp such as "3d", "1w • Edited",
+// "2 weeks ago", "Oct 1" or "Sep 27, 2025". Anything else is undefined.
+export function ageInDays(label: string, now: Date): number | undefined {
+  const text = normalise(label.split(/[•·]/)[0]).toLowerCase();
+  if (text === 'now' || text === 'just now') return 0;
+  const relative = text.match(/^(\d{1,3}) ?(s|m|h|d|w|mo|yr|y|second|minute|hour|day|week|month|year)s?(?: ago)?$/);
+  if (relative) return Number(relative[1]) * UNIT_DAYS[relative[2]];
+  const names = MONTHS.join('|');
+  const monthFirst = text.match(new RegExp(`^(${names})[a-z]*\\.? (\\d{1,2})(?:,? (\\d{4}))?$`));
+  const dayFirst = text.match(new RegExp(`^(\\d{1,2}) (${names})[a-z]*\\.?(?:,? (\\d{4}))?$`));
+  if (!monthFirst && !dayFirst) return undefined;
+  const month = MONTHS.indexOf(monthFirst ? monthFirst[1] : dayFirst![2]);
+  const day = Number(monthFirst ? monthFirst[2] : dayFirst![1]);
+  const stated = monthFirst ? monthFirst[3] : dayFirst![3];
+  const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  let year = stated ? Number(stated) : now.getFullYear();
+  // A stamp without a year is the most recent such date, never a future one.
+  if (!stated && Date.UTC(year, month, day) > today) year--;
+  const date = new Date(Date.UTC(year, month, day));
+  if (date.getUTCMonth() !== month || date.getUTCDate() !== day) return undefined;
+  return Math.max(0, Math.round((today - date.getTime()) / 86_400_000));
+}
 export function cleanSettings(value: Partial<Settings> = {}): Settings {
   return {
     enabled: typeof value.enabled === 'boolean' ? value.enabled : DEFAULTS.enabled,
     hideRecommendedJobs: typeof value.hideRecommendedJobs === 'boolean' ? value.hideRecommendedJobs : DEFAULTS.hideRecommendedJobs,
+    hideOldPosts: typeof value.hideOldPosts === 'boolean' ? value.hideOldPosts : DEFAULTS.hideOldPosts,
     limit: typeof value.limit === 'number' && Number.isFinite(value.limit)
       ? Math.min(500, Math.max(10, Math.round(value.limit))) : DEFAULTS.limit,
   };

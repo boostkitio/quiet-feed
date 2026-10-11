@@ -82,6 +82,44 @@ try {
   await popup.locator('#hideRecommendedJobs').check();
   await page.locator('#jobs-sdui.qf-jobs-hidden').waitFor({state:'attached'});
   assert.equal(analysed.length,0,'jobs filtering needs no pairing or AI calls');
+  // Posts stamped a week or more ago collapse locally and stay revealable.
+  for (const post of ['old-sdui', 'old-legacy']) await page.locator(`#${post}.qf-collapsed`).waitFor();
+  await page.locator('#old-sdui').getByText('Older than 7 days', { exact: true }).waitFor();
+  assert.equal(await page.locator('#old-sdui .post-text').isVisible(), false);
+  for (const post of ['recent-legacy', 'recent-repost', 'age-mention', 'original']) assert.equal(await page.locator(`#${post}.qf-collapsed`).count(), 0, `${post} is recent, reposted recently or undated`);
+  await page.locator('#old-sdui').getByRole('button', { name: 'Show Post', exact: true }).click();
+  assert.equal(await page.locator('#old-sdui .post-text').isVisible(), true);
+  await page.locator('#old-sdui').getByRole('button', { name: 'Hide Post', exact: true }).click();
+  await page.locator('#old-sdui.qf-collapsed').waitFor();
+  // LinkedIn's real header stamp is a bare date; today's must stay, last month's must go.
+  await page.evaluate(() => {
+    const stamp = date => date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    for (const [id, daysAgo] of [['dated-today', 0], ['dated-old', 40]]) {
+      const card = document.createElement('div'); card.id = id; card.setAttribute('role', 'listitem'); card.setAttribute('componentkey', `update-card-focus${id}`);
+      const header = document.createElement('p'), span = document.createElement('span');
+      span.textContent = stamp(new Date(Date.now() - daysAgo * 86_400_000)); header.append(span);
+      card.append(header, document.createTextNode('A dynamically loaded post.')); document.querySelector('main').append(card);
+    }
+  });
+  await page.locator('#dated-old.qf-collapsed').waitFor();
+  assert.equal(await page.locator('#dated-today.qf-collapsed').count(), 0);
+  await page.locator('#dated-old > p > span').evaluate(el => { el.textContent = '4h'; });
+  await page.waitForFunction(() => !document.querySelector('#dated-old.qf-collapsed'));
+  // Opening a single post on purpose is not the feed: only the feed applies the age rule.
+  await page.evaluate(() => history.pushState({}, '', '/posts/fixture'));
+  await page.waitForFunction(() => !document.querySelector('#old-sdui.qf-collapsed'));
+  assert.equal(await page.locator('#promoted-legacy.qf-collapsed').count(), 1, 'the promoted rule still applies off the feed');
+  await page.evaluate(() => history.pushState({}, '', '/feed/'));
+  await page.locator('#old-sdui.qf-collapsed').waitFor();
+  await popup.locator('#hideOldPosts').uncheck();
+  await page.waitForFunction(() => !document.querySelector('#old-sdui.qf-collapsed, #old-legacy.qf-collapsed'));
+  assert.equal(await page.locator('#old-sdui > .qf-host:not([hidden])').count(), 0, 'switching the age rule off removes its bar');
+  assert.equal(await page.locator('#promoted-legacy.qf-collapsed').count(), 1, 'the age toggle does not disable promoted filtering');
+  await popup.reload();
+  assert.equal(await popup.locator('#hideOldPosts').isChecked(), false, 'older-posts preference persists');
+  await popup.locator('#hideOldPosts').check();
+  await page.locator('#old-legacy.qf-collapsed').waitFor();
+  assert.equal(analysed.length,0,'age filtering needs no pairing or AI calls');
   // Reproduce the real failure: unpaired/stale pairing attempts must not spend
   // the browser allowance when no inference request has reached the companion.
   for (let n = 0; n < 30; n++) {
@@ -251,5 +289,5 @@ try {
   await recoveredPage.locator('#ai-body.qf-reply-collapsed').waitFor({ state: 'attached' });
   assert.equal(await worker.evaluate(() => chrome.storage.local.get('token').then(data => data.token === 'b'.repeat(48))), true, 'reload repairs the stale pairing before filtering');
   assert.equal(await recoveredPage.evaluate(async url => { try { return (await fetch(url)).ok; } catch { return false; } }, `chrome-extension://${id}/local-connection.json`), false, 'websites cannot read the local pairing file');
-  console.log(JSON.stringify({ passed: true, fixtureRequests: analysed.length, checks: ['original posts never analysed or labelled', 'legacy and SDUI comments', 'nested replies preserved and independently filtered', 'short AI-style replies', 'duplicate-wrapper and text-cache deduplication', 'edit and stale-response handling', 'dynamic loading', 'show/hide reply', 'pause restores content and clears UI', 'no slider or Why This Result', 'promoted posts preserved', 'draft/message exclusion', 'API failures fail open', 'budget and reset', 'legacy settings migration', 'legacy/SDUI/dynamic Videos for you modules removed', 'video-title mentions and neighbouring posts preserved', 'video section restored on pause or title change', 'missing and rejected pairing never consume allowance', 'automatic recovery from stale pairing', 'automatic connection after browser restart', 'local pairing file inaccessible to websites', 'trusted-click feedback only', 'short reply flags persist across reloads', 'keep corrections override model flags', 'future replies use saved preferences', 'late inference cannot override feedback', 'reset learning clears decisions'] }, null, 2));
+  console.log(JSON.stringify({ passed: true, fixtureRequests: analysed.length, checks: ['original posts never analysed or labelled', 'legacy and SDUI comments', 'nested replies preserved and independently filtered', 'short AI-style replies', 'duplicate-wrapper and text-cache deduplication', 'edit and stale-response handling', 'dynamic loading', 'show/hide reply', 'pause restores content and clears UI', 'no slider or Why This Result', 'promoted posts preserved', 'draft/message exclusion', 'API failures fail open', 'budget and reset', 'legacy settings migration', 'posts a week or older collapsed and revealable on the feed only', 'recent, recently reposted and undated posts preserved', 'older-posts toggle persists', 'legacy/SDUI/dynamic Videos for you modules removed', 'video-title mentions and neighbouring posts preserved', 'video section restored on pause or title change', 'missing and rejected pairing never consume allowance', 'automatic recovery from stale pairing', 'automatic connection after browser restart', 'local pairing file inaccessible to websites', 'trusted-click feedback only', 'short reply flags persist across reloads', 'keep corrections override model flags', 'future replies use saved preferences', 'late inference cannot override feedback', 'reset learning clears decisions'] }, null, 2));
 } finally { await context?.close(); await new Promise(resolve => server.close(resolve)); }

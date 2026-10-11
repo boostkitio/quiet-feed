@@ -1,9 +1,9 @@
-import { BUILD_VERSION, DEFAULTS, PREFERENCE_THRESHOLD, cleanSettings, flagged, type FeedbackLabel, type Settings, type Verdict } from './shared.ts';
-import { POSTS, COMMENTS, EXCLUDED, containsPromoted, replyNodes, replyText, videoRecommendationSections, jobRecommendationSections } from './dom.ts';
+import { BUILD_VERSION, DEFAULTS, MAX_POST_AGE_DAYS, PREFERENCE_THRESHOLD, cleanSettings, flagged, type FeedbackLabel, type Settings, type Verdict } from './shared.ts';
+import { POSTS, COMMENTS, EXCLUDED, containsPromoted, postAgeDays, replyNodes, replyText, videoRecommendationSections, jobRecommendationSections } from './dom.ts';
 
 type Base = { revealed: boolean; host: HTMLElement; signature: string };
 type Reply = Base & { text: string; verdict?: Verdict; visible: boolean; pending: boolean; failed: boolean; saving?: boolean; error?: string; feedbackGeneration: number };
-type Post = Base & { promoted: boolean };
+type Post = Base & { promoted: boolean; old: boolean };
 const replies = new Map<HTMLElement, Reply>();
 const posts = new Map<HTMLElement, Post>();
 const videoSections = new Set<HTMLElement>();
@@ -12,6 +12,9 @@ let config: Settings = DEFAULTS;
 let running = false;
 let workerCompatible = false;
 const supported = () => /^\/(feed(?:\/|$)|posts\/|in\/)/.test(location.pathname);
+// The age rule is for the feed only; a post or profile opened on purpose stays as it is.
+const feed = () => /^\/feed(?:\/|$)/.test(location.pathname);
+const isOld = (root: HTMLElement) => feed() && (postAgeDays(root) ?? 0) >= MAX_POST_AGE_DAYS;
 const styles = `:host{display:block;font:12px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#385247}:host([hidden]){display:none!important}*{box-sizing:border-box}.bar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0}.post{padding:10px 14px}span{font-weight:500}button{font:600 12px "Segoe UI",sans-serif;cursor:pointer;background:transparent;color:#315d48;border:1px solid #cedbd1;border-radius:6px;padding:5px 9px;white-space:nowrap}button:hover{background:#edf4ed}button:focus-visible{outline:2px solid #315d48;outline-offset:3px}`;
 const observer = new IntersectionObserver(entries => {
   for (const entry of entries) { const record = replies.get(entry.target as HTMLElement); if (record) record.visible = entry.isIntersecting; }
@@ -24,9 +27,9 @@ function newHost(kind: 'post' | 'reply'): HTMLElement {
   host.hidden = true; host.attachShadow({ mode: 'open' });
   return host;
 }
-function render(record: Base, show: boolean, hide: boolean, kind: 'post' | 'reply', toggle: () => void) {
+function render(record: Base, show: boolean, hide: boolean, kind: 'post' | 'reply', reason: string, toggle: () => void) {
   record.host.hidden = !show;
-  const signature = JSON.stringify([show, hide, kind]);
+  const signature = JSON.stringify([show, hide, kind, reason]);
   if (signature === record.signature) return;
   record.signature = signature;
   const shadow = record.host.shadowRoot!; shadow.replaceChildren();
@@ -34,18 +37,19 @@ function render(record: Base, show: boolean, hide: boolean, kind: 'post' | 'repl
   const style = document.createElement('style'); style.textContent = styles;
   const bar = document.createElement('span'); bar.className = kind === 'post' ? 'bar post' : 'bar';
   const label = document.createElement('span');
-  label.textContent = kind === 'post' ? 'Contains “promoted”' : 'Likely AI Reply';
+  label.textContent = reason;
   const button = document.createElement('button');
   button.textContent = `${hide ? 'Show' : 'Hide'} ${kind === 'post' ? 'Post' : 'Reply'}`;
   button.setAttribute('aria-expanded', String(!hide)); button.addEventListener('click', toggle);
   bar.append(label, button); shadow.append(style, bar);
 }
 function paintPost(root: HTMLElement, record: Post) {
-  const show = config.enabled && supported() && record.promoted;
+  const old = record.old && config.hideOldPosts;
+  const show = config.enabled && supported() && (record.promoted || old);
   const hide = show && !record.revealed;
   root.classList.toggle('qf-collapsed', hide);
   if (show && record.host.parentElement !== root) root.prepend(record.host);
-  render(record, show, hide, 'post', () => { record.revealed = !record.revealed; paintPost(root, record); });
+  render(record, show, hide, 'post', record.promoted ? 'Contains “promoted”' : `Older than ${MAX_POST_AGE_DAYS} days`, () => { record.revealed = !record.revealed; paintPost(root, record); });
 }
 function paintReply(body: HTMLElement, record: Reply) {
   const active = config.enabled && supported() && workerCompatible;
@@ -119,14 +123,15 @@ function scan() {
   }
   for (const [root, record] of posts) {
     if (!root.isConnected) { record.host.remove(); posts.delete(root); continue; }
-    const promoted = containsPromoted(root);
-    if (promoted !== record.promoted) { record.promoted = promoted; record.revealed = false; }
+    const promoted = containsPromoted(root), old = isOld(root);
+    if (promoted !== record.promoted || old !== record.old) { record.promoted = promoted; record.old = old; record.revealed = false; }
     paintPost(root, record);
   }
   for (const root of document.querySelectorAll<HTMLElement>(POSTS)) {
     if (posts.has(root) || root.parentElement?.closest(POSTS) || !root.closest('main') || root.closest(EXCLUDED)) continue;
-    if (!containsPromoted(root)) continue;
-    const record: Post = { promoted: true, revealed: false, host: newHost('post'), signature: '' };
+    const promoted = containsPromoted(root), old = isOld(root);
+    if (!promoted && !old) continue;
+    const record: Post = { promoted, old, revealed: false, host: newHost('post'), signature: '' };
     posts.set(root, record); paintPost(root, record);
   }
   for (const [body, record] of replies) {

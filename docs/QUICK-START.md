@@ -6,6 +6,8 @@ The **Videos for you** recommendation section is also removed automatically, wit
 
 **Jobs recommended for you** is hidden by default. In the Quiet Feed popup, use **Hide Recommended Jobs** to turn this on or off. Switching it off restores job recommendations immediately, and your choice is remembered.
 
+**Hide Older Posts** is on by default. Feed posts dated a week or more ago collapse to **Older than 7 days / Show Post**, using the date LinkedIn prints on each post and today's date. It works without TypeSafe. Posts reposted this week, posts with no date, and a post or profile you open directly are left alone.
+
 There is no threshold slider and no **Why This Result** box. Suspected AI reply text collapses to **Likely AI Reply / Show Reply**. Its author and any nested discussion stay available. Other replies retain a small feedback control.
 
 ## Teach Your Filter
@@ -20,7 +22,7 @@ Up to 200 choices are saved locally. A few saved examples are sent to TypeSafe a
 ## Activate An Update
 
 1. Stop the old companion using **Stop Quiet Feed.cmd**.
-2. Extract all files from **Quiet-Feed-0.4.0.zip** over your existing installation. Keep its private connection file.
+2. Extract all files from **Quiet-Feed-0.5.0.zip** over your existing installation. Keep its private connection file.
 3. Run **Start Quiet Feed.cmd** again.
 4. Open `chrome://extensions`, click **Reload** on **Quiet Feed**, then refresh LinkedIn.
 
@@ -41,10 +43,11 @@ You do not need to flag anything for automatic filtering. Jev checks loaded comm
 If the popup says **Update Ready**, open `chrome://extensions`, click the **Reload** icon on **Quiet Feed**, then refresh LinkedIn. This is the extension's Reload control. Finish any draft comment before refreshing the page.
 
 - **Hide Recommended Jobs** removes or restores the Jobs recommended for you section independently of the other filter choices.
+- **Hide Older Posts** collapses or restores feed posts dated a week or more ago, independently of the other filter choices.
 
-- **Filter Comments & Replies** pauses or resumes all filtering, including promoted posts and Videos for you.
+- **Filter Comments & Replies** pauses or resumes all filtering, including promoted posts, older posts and Videos for you.
 - **Show Reply / Hide Reply** reveals or collapses an individual reply's text.
-- **Show Post / Hide Post** reveals or collapses a post containing “promoted”.
+- **Show Post / Hide Post** reveals or collapses a post containing “promoted” or one older than 7 days.
 - **Connection & Limits** holds pairing settings and the session request budget, initially 100.
 - **Reset Session & Retry** allows more requests and retries failures. TypeSafe account usage charges apply.
 

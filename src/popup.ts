@@ -16,6 +16,7 @@ async function status() {
   config = state.settings;
   $<HTMLInputElement>('enabled').checked = config.enabled;
   $<HTMLInputElement>('hideRecommendedJobs').checked = config.hideRecommendedJobs;
+  $<HTMLInputElement>('hideOldPosts').checked = config.hideOldPosts;
   $<HTMLInputElement>('limit').value = String(config.limit);
   $('analysed').textContent = String(state.session.analysed || 0);
   $('remaining').textContent = String(Math.max(0, config.limit - (state.session.requests || 0)));
@@ -34,12 +35,13 @@ async function save() {
   const next: Settings = {
     enabled: $<HTMLInputElement>('enabled').checked,
     hideRecommendedJobs: $<HTMLInputElement>('hideRecommendedJobs').checked,
+    hideOldPosts: $<HTMLInputElement>('hideOldPosts').checked,
     limit: Number($<HTMLInputElement>('limit').value),
   };
   await send({ type: 'save', settings: next }); config = next;
-  $('message').textContent = 'Saved. Open comments update automatically.';
+  $('message').textContent = 'Saved. Open LinkedIn tabs update automatically.';
 }
-for (const id of ['enabled', 'hideRecommendedJobs', 'limit']) $(id).addEventListener('change', () => { void save().catch(showError); });
+for (const id of ['enabled', 'hideRecommendedJobs', 'hideOldPosts', 'limit']) $(id).addEventListener('change', () => { void save().catch(showError); });
 $('pair').addEventListener('click', async () => {
   const button = $<HTMLButtonElement>('pair'); button.disabled = true;
   try { await send({ type: 'pair', token: $<HTMLInputElement>('token').value }); $<HTMLInputElement>('token').value = ''; await status(); $('message').textContent = 'Connected. Your feed is ready.'; }

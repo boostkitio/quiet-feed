@@ -24,6 +24,7 @@ try{
  await popup.getByText('Update Ready',{exact:true}).waitFor();
  assert.ok((await popup.locator('#connectionDetail').innerText()).includes('chrome://extensions'));
  assert.equal(await popup.locator('#hideRecommendedJobs').isDisabled(),true);
+ assert.equal(await popup.locator('#hideOldPosts').isDisabled(),true);
  const oldReply=await popup.evaluate(()=>chrome.runtime.sendMessage({type:'feedback',text:'fixture',label:'potential-ai'}));
  assert.equal(oldReply.error,'Invalid extension request','reproduces the legacy worker error');
  await writeFile(resolve(extension,'background.js'),currentWorker);
