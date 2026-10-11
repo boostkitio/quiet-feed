@@ -53,6 +53,11 @@ async function restoreLocalPairing(): Promise<boolean> {
     return true;
   } catch { return false; }
 }
+// Private, per-installation options: a local-options.json placed by hand beside the extension
+// files. Like the pairing file it is never packaged, committed or readable by a web page.
+// The promoted-post rule exists only where this file switches it on; public builds never have it.
+const promotedOption: Promise<boolean> = fetch(chrome.runtime.getURL('local-options.json'), { cache: 'no-store' })
+  .then(file => file.ok ? file.json() : {}).then((options: { promoted?: unknown }) => options?.promoted === true).catch(() => false);
 // Optional: the reader's own TypeSafe key, pasted into the popup. It stays in
 // trusted extension storage, is sent only to TypeSafe and is never returned to a page or the popup.
 async function directKey(): Promise<string> { return String((await chrome.storage.local.get('typesafeKey')).typesafeKey || ''); }
@@ -171,7 +176,7 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
   const linkedin = /^https:\/\/www\.linkedin\.com\/(feed(?:\/|$)|posts\/|in\/)/.test(source);
   const task = async () => {
     await ready;
-    if (message.type === 'settings' && (popup || linkedinHost)) return { settings: await settings(), build: BUILD_VERSION, aiReady: await aiReady() };
+    if (message.type === 'settings' && (popup || linkedinHost)) return { settings: await settings(), build: BUILD_VERSION, aiReady: await aiReady(), promotedOption: await promotedOption };
     if (message.type === 'analyse' && message.kind === 'reply' && linkedin) return { verdict: await analyse(message.text) };
     if (message.type === 'feedback' && linkedin) {
       if (typeof message.text !== 'string' || !normalise(message.text) || message.text.length > MAX_TEXT || !['potential-ai','keep'].includes(message.label)) throw new Error('Invalid feedback');

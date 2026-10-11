@@ -46,8 +46,13 @@ try {
   await popup.locator('#connection').getByText('Filtering Posts', { exact: true }).waitFor();
   assert.equal(await popup.locator('#apiKey').isVisible(), false, 'a fresh install is not presented as needing setup');
   const page = await context.newPage(); await page.goto('https://www.linkedin.com/feed/');
-  for (const post of ['promoted-legacy', 'old-sdui', 'suggested-sdui']) await page.locator(`#${post}.qf-collapsed`).waitFor();
-  await page.locator('#feed-sort > .qf-filter-host').getByText('Quiet Feed hides:', { exact: true }).waitFor();
+  for (const post of ['old-sdui', 'suggested-sdui', 'activity-sdui']) await page.locator(`#${post}.qf-collapsed`).waitFor();
+  const row = page.locator('#feed-sort > .qf-filter-host');
+  await row.getByText('Quiet Feed hides:', { exact: true }).waitFor();
+  // The public build has no promoted-post rule at all: no switch, and such posts are left alone.
+  assert.deepEqual(await row.locator('label').evaluateAll(labels => labels.map(label => label.textContent.replace(/\d+ days/g, '').trim())), ['Suggested', 'Liked by others', 'Engagement bait', 'Older than']);
+  for (const post of ['promoted-legacy', 'promoted-sdui', 'promoted-image', 'promoted-body']) assert.equal(await page.locator(`#${post}.qf-collapsed`).count(), 0, `${post} stays visible in the public build`);
+  assert.equal(await page.locator('#promoted-legacy .post-text').isVisible(), true);
   await page.waitForTimeout(700);
   assert.equal(await page.locator('.qf-reply-host:not([hidden])').count(), 0, 'no reply controls are offered without a key or companion');
   assert.equal(calls.length + rejected, 0, 'post filters make no requests');
@@ -95,6 +100,7 @@ try {
   await popup.locator('#connection').getByText('Filtering Posts', { exact: true }).waitFor();
   await page.waitForFunction(() => !document.querySelector('.qf-reply-collapsed, .qf-reply-host:not([hidden])'));
   assert.equal(JSON.stringify(await worker.evaluate(() => chrome.storage.local.get(null))).includes(goodKey), false, 'removing the key erases it');
-  assert.equal(await page.locator('#promoted-legacy.qf-collapsed').count(), 1, 'post filters carry on without the key');
-  console.log('Passed: extension-only install filters posts with no requests; own-key reply checking, rejection handling, privacy of the key, local feedback and key removal.');
+  assert.equal(await page.locator('#old-sdui.qf-collapsed').count(), 1, 'post filters carry on without the key');
+  assert.equal(await page.locator('#promoted-legacy.qf-collapsed').count(), 0);
+  console.log('Passed: extension-only install filters posts with no requests and has no promoted-post rule; own-key reply checking, rejection handling, privacy of the key, local feedback and key removal.');
 } finally { await context?.close(); await new Promise(done => server.close(done)); }

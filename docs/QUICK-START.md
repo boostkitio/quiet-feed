@@ -2,7 +2,7 @@
 
 Most people only need the extension-only download and its three-step **INSTALL.md**. This package adds a companion that keeps your TypeSafe key outside the browser and starts with Windows.
 
-Quiet Feed now focuses on **AI-written comments and replies**. Original posts stay as they are, except posts containing **promoted**, which still hide automatically.
+This package checks **comments and replies** for AI-style writing through the companion. The post filters work the same as in the extension-only download.
 
 The **Videos for you** recommendation section is also removed automatically, without using TypeSafe. Pausing the filter restores it.
 
@@ -10,7 +10,7 @@ The **Videos for you** recommendation section is also removed automatically, wit
 
 **Hide Older Posts** is on by default. Feed posts older than your chosen age (7 days unless you change it) collapse to **Older than 7 days / Show Post**, using the date LinkedIn prints on each post and today's date. It works without TypeSafe. Posts reposted this week, posts with no date, and a post or profile you open directly are left alone.
 
-On the feed, a **Quiet Feed hides:** row sits just beneath LinkedIn's **Sort by** control. Use it to switch **Contains “promoted”** and **Older than** on or off and to choose 7, 14, 30 or 90 days. Changes apply straight away and are remembered.
+On the feed, a **Quiet Feed hides:** row sits just beneath LinkedIn's **Sort by** control. Use it to switch each post rule on or off and to choose 7, 14, 30 or 90 days for **Older than**. Changes apply straight away and are remembered.
 
 The feed row also switches **Suggested** posts, posts **Liked by others** (shown only because someone else reacted, for example “Name celebrates this”) and, off by default, **Engagement bait** formatting. In the popup, **Mute Words** collapses posts containing words you list, matched as whole words, and **Hide News & Puzzles** clears those panels from the right-hand column.
  Hover over any item in the row for a short explanation.
@@ -24,12 +24,12 @@ There is no threshold slider and no **Why This Result** box. Suspected AI reply 
 - Future checks use a small selection of your flagged and kept examples to learn your reading preferences. This does not prove AI authorship or retrain TypeSafe's underlying model.
 - Open **Quiet Feed → Your Feedback** to see the counts, or choose **Reset Learning** to clear your examples and start again.
 
-Up to 200 choices are saved locally. A few saved examples are sent to TypeSafe as context on future checks; flagging/keeping itself does not use an API request. Original posts, promoted-post removal and Videos for you removal are unchanged.
+Up to 200 choices are saved locally. A few saved examples are sent to TypeSafe as context on future checks; flagging/keeping itself does not use an API request. Original posts are never sent.
 
 ## Activate An Update
 
 1. Stop the old companion using **Stop Quiet Feed.cmd**.
-2. Extract all files from **Quiet-Feed-0.7.2.zip** over your existing installation. Keep its private connection file.
+2. Extract all files from **Quiet-Feed-0.7.3.zip** over your existing installation. Keep its private connection file.
 3. Run **Start Quiet Feed.cmd** again.
 4. Open `chrome://extensions`, click **Reload** on **Quiet Feed**, then refresh LinkedIn.
 
@@ -51,11 +51,11 @@ If the popup says **Update Ready**, open `chrome://extensions`, click the **Relo
 
 - **Hide Recommended Jobs** removes or restores the Jobs recommended for you section independently of the other filter choices.
 - **Hide Older Posts** collapses or restores feed posts past your chosen age, independently of the other filter choices.
-- **Quiet Feed hides:** (on the feed, beneath Sort by) switches the promoted and age rules and sets the age.
+- **Quiet Feed hides:** (on the feed, beneath Sort by) switches the post rules and sets the age.
 
-- **Quiet My Feed** pauses or resumes all filtering, including promoted posts, older posts and Videos for you.
+- **Quiet My Feed** pauses or resumes all filtering, including older posts and Videos for you.
 - **Show Reply / Hide Reply** reveals or collapses an individual reply's text.
-- **Show Post / Hide Post** reveals or collapses a post containing “promoted” or one older than your chosen age.
+- **Show Post / Hide Post** reveals or collapses a hidden post, such as one older than your chosen age.
 - **AI Reply Filter** holds the optional TypeSafe key field, pairing settings and the session request budget, initially 100. Leave the key field empty when you use this companion.
 - **Reset Session & Retry** allows more requests and retries failures. TypeSafe account usage charges apply.
 
@@ -63,6 +63,6 @@ Only loaded reply text is sent to TypeSafe. Private messages and text in editors
 
 Run **Start Quiet Feed.cmd** once to enable automatic startup. The companion then starts quietly whenever you sign into Windows and restarts if it exits unexpectedly. You can close the launcher window. Keep the installation folder where it is.
 
-**Stop Quiet Feed.cmd** stops it until Start or the next Windows sign-in. **Disable Quiet Feed Startup.cmd** stops it and removes automatic startup without deleting your saved key, pairing or feedback. The companion must be running for AI filtering; the promoted-word rule works without it.
+**Stop Quiet Feed.cmd** stops it until Start or the next Windows sign-in. **Disable Quiet Feed Startup.cmd** stops it and removes automatic startup without deleting your saved key, pairing or feedback. The companion must be running for AI filtering; the post rules work without it.
 
-If promoted posts disappear but **Replies Checked** stays at zero, check the connection message: promoted filtering is entirely local, while reply analysis requires a paired companion. After reconnecting, **Reset Session & Retry** clears any old failed attempts.
+If posts are being hidden but **Replies Checked** stays at zero, check the connection message: the post rules are entirely local, while reply analysis requires a paired companion. After reconnecting, **Reset Session & Retry** clears any old failed attempts.

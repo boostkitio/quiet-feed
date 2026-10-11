@@ -49,7 +49,7 @@ try{
  await liveWorker.evaluate(()=>chrome.runtime.reload()).catch(()=>{});
  await row.getByText('Quiet Feed was updated or reloaded. Refresh this page to carry on.',{exact:true}).waitFor();
  assert.equal(await row.getByRole('checkbox',{name:'Suggested',exact:true}).isDisabled(),true,'stale controls are disabled rather than silently ignored');
- assert.equal(await currentPage.locator('#promoted-legacy.qf-collapsed').count(),1,'what was hidden stays hidden');
+ assert.equal(await currentPage.locator('#old-sdui.qf-collapsed').count(),1,'what was hidden stays hidden');
  for(const box of await row.getByRole('checkbox').all())await box.click({force:true,timeout:2000}).catch(()=>{});
  await currentPage.locator('#short-comment').scrollIntoViewIfNeeded();
  await currentPage.waitForTimeout(3500);

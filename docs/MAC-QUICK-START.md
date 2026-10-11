@@ -2,12 +2,12 @@
 
 Most people only need the extension-only download and its three-step **INSTALL.md**, which works on a Mac with nothing else installed. This package adds a companion that keeps your TypeSafe key in the macOS Keychain and starts at login.
 
-Quiet Feed runs in desktop Chrome on macOS. It hides likely AI-written comments and replies, posts containing “promoted”, the “Videos for you” section, and (by default) “Jobs recommended for you” and feed posts older than 7 days. A row beneath LinkedIn's Sort by control switches the promoted and age rules and sets the age. Every hidden reply or post can be revealed.
+Quiet Feed runs in desktop Chrome on macOS. It hides likely AI-written comments and replies, suggested posts, the “Videos for you” section, and (by default) “Jobs recommended for you” and feed posts older than 7 days. A row beneath LinkedIn's Sort by control switches the promoted and age rules and sets the age. Every hidden reply or post can be revealed.
 
 ## Set Up
 
 1. Install [Node.js 24 or later](https://nodejs.org/en/download). Get your own TypeSafe API key from [your TypeSafe account](https://console.typesafe.ai/keys). Your TypeSafe account supplies the credits used by your key.
-2. Extract **Quiet-Feed-macOS-0.7.2.zip** into a folder you will keep. Do not move that folder after setup.
+2. Extract **Quiet-Feed-macOS-0.7.3.zip** into a folder you will keep. Do not move that folder after setup.
 3. Open **Terminal**. Type `bash ` (including the space), drag **start-mac.sh** from the extracted folder into Terminal, and press Return. On first use, macOS Keychain asks you to enter your TypeSafe key. The key is saved in your Keychain, not in Chrome or the ZIP.
 4. Open `chrome://extensions`, enable **Developer mode**, select **Load unpacked**, and choose the extracted **dist/extension** folder.
 5. Open Quiet Feed from Chrome’s extensions menu. It should say **Connected & Filtering** without a pairing-code paste. Visit LinkedIn in Chrome and open a comment thread.

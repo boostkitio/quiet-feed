@@ -14,12 +14,14 @@ let running = false;
 let workerCompatible = false;
 // Reply checking is optional: it needs a TypeSafe key in the popup or a paired companion.
 let aiReady = false;
+// The promoted-post rule and its switch exist only on an installation that opted in privately.
+let promotedOption = false;
 const supported = () => /^\/(feed(?:\/|$)|posts\/|in\/)/.test(location.pathname);
 // Everything but the promoted rule is for the feed only; a post or profile opened on purpose stays as it is.
 const feed = () => /^\/feed(?:\/|$)/.test(location.pathname);
 // The first active rule a post matches, worded for its bar; empty when it should stay.
 function postReason(root: HTMLElement): string {
-  if (config.hidePromoted && containsPromoted(root)) return 'Contains “promoted”';
+  if (promotedOption && config.hidePromoted && containsPromoted(root)) return 'Contains “promoted”';
   if (!feed()) return '';
   const source = config.hideSuggested || config.hideActivity ? postSource(root) : undefined;
   if (source === 'suggested' && config.hideSuggested) return 'Suggested post';
@@ -103,7 +105,7 @@ function paintFilters() {
       const label = document.createElement('label'), input = document.createElement('input');
       input.type = 'checkbox'; label.title = tip; label.append(input, text); return { label, input };
     };
-    const switches = FILTER_SWITCHES.map(([key, text, tip]) => ({ key, ...check(text, tip) }));
+    const switches = FILTER_SWITCHES.filter(([key]) => key !== 'hidePromoted' || promotedOption).map(([key, text, tip]) => ({ key, ...check(text, tip) }));
     const days = document.createElement('select'); days.setAttribute('aria-label', 'Post age'); days.title = 'Choose how old a post must be before it is hidden.';
     for (const value of POST_AGE_OPTIONS) days.add(new Option(`${value} days`, String(value)));
     switches.at(-1)!.label.append(days);
@@ -299,7 +301,7 @@ const mutations = new MutationObserver(changes => {
 });
 void chrome.runtime.sendMessage({ type: 'settings' }).then(response => {
   if (response?.settings) config = cleanSettings(response.settings);
-  workerCompatible = response?.build === BUILD_VERSION; aiReady = Boolean(response?.aiReady);
+  workerCompatible = response?.build === BUILD_VERSION; aiReady = Boolean(response?.aiReady); promotedOption = response?.promotedOption === true;
   document.documentElement.dataset.quietFeedBuild = BUILD_VERSION;
   document.documentElement.dataset.quietFeedWorkerBuild = response?.build || 'legacy';
   mutations.observe(document.body, { childList: true, subtree: true, characterData: true }); scan();

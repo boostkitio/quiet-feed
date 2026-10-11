@@ -12,7 +12,7 @@ Chrome may remind you that a developer-mode extension is running. That is expect
 
 ## What it does
 
-- Hides posts marked **Promoted**, **Suggested** posts, and posts **Liked by others** (shown only because someone else liked or commented).
+- Hides **Suggested** posts, and posts **Liked by others** (shown only because someone else liked or commented).
 - Hides posts older than 7, 14, 30 or 90 days.
 - Hides **Jobs recommended for you** and **Videos for you**.
 - Optionally hides posts written in one-line engagement-bait format, posts containing words you mute, and the **LinkedIn News** and **Today’s puzzles** panels.
