@@ -31,6 +31,16 @@ if ($Platform -eq 'windows') {
 $quietSecretMatches = @(rg -l 'apikey_[A-Za-z0-9_]+|"token"\s*:\s*"[a-f0-9]{48}"' $quietStage)
 if ($quietSecretMatches.Count) { throw 'Credential scan failed. Release not created.' }
 $quietFileName = if ($Platform -eq 'macOS') { "Quiet-Feed-macOS-$quietVersion.zip" } else { "Quiet-Feed-$quietVersion.zip" }
-$quietZip = Join-Path $Destination $quietFileName
-Compress-Archive -Path (Join-Path $quietStage '*') -DestinationPath $quietZip -Force
+$quietZip = Join-Path (Resolve-Path -LiteralPath $Destination) $quietFileName
+# Compress-Archive in Windows PowerShell 5.1 writes backslash entry names,
+# which macOS cannot extract into folders. Write forward slashes explicitly.
+Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
+if (Test-Path -LiteralPath $quietZip) { Remove-Item -LiteralPath $quietZip }
+$quietArchive = [IO.Compression.ZipFile]::Open($quietZip, 'Create')
+try {
+    foreach ($quietItem in Get-ChildItem -LiteralPath $quietStage -Recurse -File) {
+        $quietName = $quietItem.FullName.Substring($quietStage.Length + 1).Replace('\', '/')
+        [void][IO.Compression.ZipFileExtensions]::CreateEntryFromFile($quietArchive, $quietItem.FullName, $quietName)
+    }
+} finally { $quietArchive.Dispose() }
 Write-Host "Packaged Quiet Feed $quietVersion for $Platform; private connection files excluded."
