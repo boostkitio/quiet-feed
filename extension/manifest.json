@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Quiet Feed · TypeSafe For LinkedIn",
   "description": "A calmer LinkedIn feed: hide promoted, suggested and old posts, mute words, and optionally AI-style replies. Reveal anything with one click.",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "minimum_chrome_version": "120",
   "permissions": ["storage"],
   "host_permissions": ["http://127.0.0.1:43127/*", "https://api.typesafe.ai/*", "https://www.linkedin.com/*"],

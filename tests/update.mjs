@@ -39,5 +39,16 @@ try{
  await context.route('https://www.linkedin.com/**',route=>readFile('tests/feed.html','utf8').then(body=>route.fulfill({status:200,contentType:'text/html',body})));
  const currentPage=await context.newPage();await currentPage.goto('https://www.linkedin.com/feed/');
  await currentPage.waitForFunction(()=>document.documentElement.dataset.quietFeedBuild===document.documentElement.dataset.quietFeedWorkerBuild);
- console.log('Passed: legacy Invalid extension request reproduced; mismatched controls gated with clear update instructions; clean installation loads matching worker and page. Chrome command-line profiles do not test the real user-profile reload action.');
+ // A page left open across an extension reload must say so, not fail silently or throw.
+ const pageErrors=[];currentPage.on('pageerror',error=>pageErrors.push(String(error)));
+ const row=currentPage.locator('.qf-filter-host');
+ await row.getByText('Quiet Feed hides:',{exact:true}).waitFor();
+ let [liveWorker]=context.serviceWorkers();if(!liveWorker)liveWorker=await context.waitForEvent('serviceworker');
+ await liveWorker.evaluate(()=>chrome.runtime.reload()).catch(()=>{});
+ await row.getByText('Quiet Feed was updated or reloaded. Refresh this page to carry on.',{exact:true}).waitFor();
+ assert.equal(await row.getByRole('checkbox',{name:'Suggested',exact:true}).isDisabled(),true,'stale controls are disabled rather than silently ignored');
+ assert.equal(await currentPage.locator('#promoted-legacy.qf-collapsed').count(),1,'what was hidden stays hidden');
+ await currentPage.waitForTimeout(3500);
+ assert.deepEqual(pageErrors,[],'a stale page raises no errors');
+ console.log('Passed: legacy Invalid extension request reproduced; mismatched controls gated with clear update instructions; clean installation loads matching worker and page; a page left open across an extension reload asks for a refresh. Chrome command-line profiles do not test the real user-profile reload action.');
 }finally{await context.close();}

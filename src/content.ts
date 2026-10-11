@@ -71,6 +71,9 @@ type FilterSwitch = Exclude<typeof FEED_FILTER_KEYS[number], 'maxPostAgeDays'>;
 const FILTER_SWITCHES: [FilterSwitch, string][] = [['hidePromoted', 'Contains “promoted”'], ['hideSuggested', 'Suggested'], ['hideActivity', 'Others’ activity'], ['hideBait', 'Engagement bait'], ['hideOldPosts', 'Older than']];
 let filters: { boxes: [FilterSwitch, HTMLInputElement][]; days: HTMLSelectElement; error: HTMLElement } | undefined;
 let filterError = '';
+const STALE = 'Quiet Feed was updated or reloaded. Refresh this page to carry on.';
+// After the extension is reloaded, this page's copy of the script can no longer reach it.
+const stale = () => !chrome.runtime?.id;
 let filterSaves = 0;
 let realClick = false;
 function paintFilters() {
@@ -102,7 +105,8 @@ function paintFilters() {
     for (const { input } of switches) input.addEventListener('click', event => { realClick = event.isTrusted; });
     bar.append(title, ...switches.map(item => item.label)); filterHost.shadowRoot!.append(style, bar, error);
   }
-  for (const [key, box] of filters.boxes) box.checked = config[key];
+  for (const [key, box] of filters.boxes) { box.checked = config[key]; box.disabled = stale(); }
+  filters.days.disabled = stale();
   filters.days.value = String(config.maxPostAgeDays); filters.error.textContent = filterError;
 }
 function changeFilters(event: Event) {
@@ -122,8 +126,7 @@ async function saveFilters(patch: Partial<Settings>) {
     const response = await chrome.runtime.sendMessage({ type: 'saveFilters', settings: patch });
     if (!response?.settings) throw new Error(response?.error);
   } catch (error) {
-    const detail = error instanceof Error && error.message && !/context invalidated/i.test(error.message) ? error.message : 'Reload Quiet Feed at chrome://extensions, then refresh LinkedIn.';
-    filterError = `This choice applies to this page but could not be saved. ${detail}`;
+    filterError = stale() || /context invalidated/i.test(String(error)) ? STALE : `This choice applies to this page but could not be saved. ${error instanceof Error && error.message ? error.message : 'Refresh this page and try again.'}`;
   } finally { filterSaves--; paintFilters(); }
 }
 function paintReply(body: HTMLElement, record: Reply) {
@@ -164,7 +167,7 @@ function paintReply(body: HTMLElement, record: Reply) {
   if (record.error) { const error = document.createElement('span'); error.className = 'error'; error.setAttribute('role','status'); error.textContent = record.error; shadow.append(error); }
 }
 async function saveFeedback(body: HTMLElement, record: Reply, label: FeedbackLabel) {
-  if (!workerCompatible) return;
+  if (!workerCompatible || stale()) return;
   if (record.saving) return;
   record.saving = true; record.error = ''; paintReply(body, record);
   const submitted = replyText(body);
@@ -177,6 +180,12 @@ async function saveFeedback(body: HTMLElement, record: Reply, label: FeedbackLab
   finally { record.saving = false; paintReply(body, record); }
 }
 function scan() {
+  if (stale()) {
+    // Stop quietly: keep what is already hidden, say why the controls no longer respond.
+    clearInterval(timer); mutations.disconnect(); observer.disconnect(); filterError = STALE;
+    if (filters) paintFilters();
+    return;
+  }
   paintFilters();
   const currentJobSections = new Set(supported() ? jobRecommendationSections() : []);
   for (const section of jobSections) {
@@ -288,4 +297,4 @@ void chrome.runtime.sendMessage({ type: 'settings' }).then(response => {
   mutations.observe(document.body, { childList: true, subtree: true, characterData: true }); scan();
 }).catch(() => {});
 window.addEventListener('popstate', scan);
-setInterval(scan, 3000);
+const timer = setInterval(scan, 3000);
