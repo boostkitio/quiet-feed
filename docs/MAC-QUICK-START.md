@@ -2,7 +2,7 @@
 
 Most people only need the extension-only download and its three-step **INSTALL.md**, which works on a Mac with nothing else installed. This package adds a companion that keeps your TypeSafe key in the macOS Keychain and starts at login.
 
-Quiet Feed runs in desktop Chrome on macOS. It hides likely AI-written comments and replies, suggested posts, the “Videos for you” section, and (by default) “Jobs recommended for you” and feed posts older than 7 days. A row beneath LinkedIn's Sort by control switches the promoted and age rules and sets the age. Every hidden reply or post can be revealed.
+Quiet Feed runs in desktop Chrome on macOS. It hides likely AI-written comments and replies, suggested posts, the “Videos for you” section, and (by default) “Jobs recommended for you” and feed posts older than 7 days. A row beneath LinkedIn's Sort by control switches each post rule and sets the age. Every hidden reply or post can be revealed.
 
 ## Set Up
 
