@@ -1,4 +1,4 @@
-import { BUILD_VERSION, DEFAULTS, POST_AGE_OPTIONS, PREFERENCE_THRESHOLD, cleanSettings, flagged, type FeedbackLabel, type Settings, type Verdict } from './shared.ts';
+import { BUILD_VERSION, DEFAULTS, FEED_FILTER_KEYS, POST_AGE_OPTIONS, PREFERENCE_THRESHOLD, cleanSettings, flagged, type FeedbackLabel, type Settings, type Verdict } from './shared.ts';
 import { POSTS, COMMENTS, EXCLUDED, containsPromoted, feedSortControl, postAgeDays, replyNodes, replyText, videoRecommendationSections, jobRecommendationSections } from './dom.ts';
 
 type Base = { revealed: boolean; host: HTMLElement; signature: string };
@@ -53,7 +53,10 @@ function paintPost(root: HTMLElement, record: Post) {
 }
 // The two post rules, switchable in the feed itself beneath LinkedIn's Sort by control.
 const filterHost = newHost('post'); filterHost.classList.add('qf-filter-host');
-let filters: { promoted: HTMLInputElement; old: HTMLInputElement; days: HTMLSelectElement } | undefined;
+let filters: { promoted: HTMLInputElement; old: HTMLInputElement; days: HTMLSelectElement; error: HTMLElement } | undefined;
+let filterError = '';
+let filterSaves = 0;
+let realClick = false;
 function paintFilters() {
   const sort = config.enabled && feed() && workerCompatible ? feedSortControl() : null;
   filterHost.hidden = !sort;
@@ -62,9 +65,13 @@ function paintFilters() {
   if (filterHost.parentElement !== row) row.append(filterHost);
   if (!filters) {
     const style = document.createElement('style');
-    style.textContent = styles + '.filters{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:6px 16px;padding:8px 0 2px}label{display:inline-flex;align-items:center;gap:6px;cursor:pointer}input{margin:0;accent-color:#315d48}select{font:inherit;color:inherit;background:transparent;border:1px solid #cedbd1;border-radius:6px;padding:3px 5px;cursor:pointer}input:focus-visible,select:focus-visible{outline:2px solid #315d48;outline-offset:2px}';
+    style.textContent = styles + '.filters{display:inline-flex;flex-wrap:wrap;align-items:center;gap:6px 16px;margin:10px 0 2px;padding:8px 12px;background:#fff;border:1px solid #dfe5dc;border-radius:8px}.title{display:inline-flex;align-items:center;gap:8px;font-weight:600}.mark{display:grid;place-items:center;width:20px;height:20px;border-radius:6px;background:#224b3d;color:#eff8ea;font-size:14px;font-weight:700;letter-spacing:-1px;line-height:1;padding:0 2px 2px 0}.error{display:block;margin:4px 2px 0;color:#8a402a;font-size:11px}.error:empty{display:none}label{display:inline-flex;align-items:center;gap:6px;cursor:pointer}input{margin:0;accent-color:#315d48}select{font:inherit;color:inherit;background:transparent;border:1px solid #cedbd1;border-radius:6px;padding:3px 5px;cursor:pointer}input:focus-visible,select:focus-visible{outline:2px solid #315d48;outline-offset:2px}';
     const bar = document.createElement('div'); bar.className = 'filters'; bar.setAttribute('role', 'group'); bar.setAttribute('aria-label', 'Quiet Feed post filters');
-    const title = document.createElement('span'); title.textContent = 'Quiet Feed hides:';
+    const title = document.createElement('span'); title.className = 'title';
+    const mark = document.createElement('span'); mark.className = 'mark'; mark.setAttribute('aria-hidden', 'true'); mark.textContent = 'q.';
+    const name = document.createElement('span'); name.textContent = 'Quiet Feed hides:';
+    title.append(mark, name);
+    const error = document.createElement('span'); error.className = 'error'; error.setAttribute('role', 'status');
     const check = (text: string) => {
       const label = document.createElement('label'), input = document.createElement('input');
       input.type = 'checkbox'; label.append(input, text); return { label, input };
@@ -73,20 +80,34 @@ function paintFilters() {
     const days = document.createElement('select'); days.setAttribute('aria-label', 'Post age');
     for (const value of POST_AGE_OPTIONS) days.add(new Option(`${value} days`, String(value)));
     old.label.append(days);
-    filters = { promoted: promoted.input, old: old.input, days };
-    for (const control of [promoted.input, old.input, days]) control.addEventListener('change', event => { void saveFilters(event); });
-    bar.append(title, promoted.label, old.label); filterHost.shadowRoot!.append(style, bar);
+    filters = { promoted: promoted.input, old: old.input, days, error };
+    for (const control of [promoted.input, old.input, days]) control.addEventListener('change', changeFilters);
+    // A scripted click() still fires a trusted change, so the click itself must be real.
+    for (const box of [promoted.input, old.input]) box.addEventListener('click', event => { realClick = event.isTrusted; });
+    bar.append(title, promoted.label, old.label); filterHost.shadowRoot!.append(style, bar, error);
   }
   filters.promoted.checked = config.hidePromoted; filters.old.checked = config.hideOldPosts;
-  filters.days.value = String(config.maxPostAgeDays);
+  filters.days.value = String(config.maxPostAgeDays); filters.error.textContent = filterError;
 }
-async function saveFilters(event: Event) {
+function changeFilters(event: Event) {
   // Only a real click or key press may change settings; the page cannot script it.
-  if (event.isTrusted && filters) {
-    const response = await chrome.runtime.sendMessage({ type: 'saveFilters', settings: { hidePromoted: filters.promoted.checked, hideOldPosts: filters.old.checked, maxPostAgeDays: Number(filters.days.value) } }).catch(() => undefined);
-    if (response?.settings) config = cleanSettings(response.settings);
-  }
-  scan();
+  const real = event.isTrusted && (event.target instanceof HTMLSelectElement || realClick);
+  realClick = false;
+  if (!real || !filters) return scan();
+  const patch = { hidePromoted: filters.promoted.checked, hideOldPosts: filters.old.checked, maxPostAgeDays: Number(filters.days.value) };
+  // Apply at once so a rescan can never snap the choice back while the save is in flight.
+  config = cleanSettings({ ...config, ...patch }); filterError = ''; scan();
+  void saveFilters(patch);
+}
+async function saveFilters(patch: Partial<Settings>) {
+  filterSaves++;
+  try {
+    const response = await chrome.runtime.sendMessage({ type: 'saveFilters', settings: patch });
+    if (!response?.settings) throw new Error(response?.error);
+  } catch (error) {
+    const detail = error instanceof Error && error.message && !/context invalidated/i.test(error.message) ? error.message : 'Reload Quiet Feed at chrome://extensions, then refresh LinkedIn.';
+    filterError = `This choice applies to this page but could not be saved. ${detail}`;
+  } finally { filterSaves--; paintFilters(); }
 }
 function paintReply(body: HTMLElement, record: Reply) {
   const active = config.enabled && supported() && workerCompatible;
@@ -213,7 +234,9 @@ async function processQueue() {
 }
 chrome.runtime.onMessage.addListener(message => {
   if (message.type === 'settingsChanged') {
-    config = cleanSettings(message.settings);
+    // An older save's broadcast must not undo a newer choice still being saved from this page.
+    const mine = filterSaves ? Object.fromEntries(FEED_FILTER_KEYS.map(key => [key, config[key]])) : {};
+    config = cleanSettings({ ...message.settings, ...mine });
     for (const record of replies.values()) record.failed = false;
     scan();
   }

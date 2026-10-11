@@ -24,7 +24,7 @@ Up to 200 choices are saved locally. A few saved examples are sent to TypeSafe a
 ## Activate An Update
 
 1. Stop the old companion using **Stop Quiet Feed.cmd**.
-2. Extract all files from **Quiet-Feed-0.6.0.zip** over your existing installation. Keep its private connection file.
+2. Extract all files from **Quiet-Feed-0.6.1.zip** over your existing installation. Keep its private connection file.
 3. Run **Start Quiet Feed.cmd** again.
 4. Open `chrome://extensions`, click **Reload** on **Quiet Feed**, then refresh LinkedIn.
 

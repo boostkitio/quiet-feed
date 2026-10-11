@@ -136,7 +136,14 @@ try {
   await chooseAge('14');
   await page.locator('#old-legacy.qf-collapsed').waitFor();
   await promotedBox.uncheck();
-  await page.waitForFunction(() => !document.querySelector('#promoted-legacy.qf-collapsed, #promoted-body.qf-collapsed'));
+  assert.equal(await page.locator('#promoted-legacy.qf-collapsed, #promoted-body.qf-collapsed').count(), 0, 'a choice applies at once, before the save returns');
+  await page.waitForTimeout(3500);
+  assert.equal(await promotedBox.isChecked(), false, 'a rescan never snaps an unticked rule back');
+  assert.equal((await worker.evaluate(() => chrome.storage.local.get('settings'))).settings.hidePromoted, false);
+  await filters.getByText('Contains “promoted”', { exact: true }).click();
+  await page.locator('#promoted-legacy.qf-collapsed').waitFor();
+  await promotedBox.focus(); await page.keyboard.press('Space');
+  assert.equal(await page.locator('#promoted-legacy.qf-collapsed').count(), 0, 'label clicks and the space bar both work');
   assert.equal(await page.locator('#old-sdui.qf-collapsed').count(), 1, 'the promoted switch leaves the age rule alone');
   await promotedBox.check();
   await page.locator('#promoted-legacy.qf-collapsed').waitFor();
@@ -144,6 +151,12 @@ try {
   await page.waitForTimeout(600);
   assert.equal(await page.locator('#promoted-legacy.qf-collapsed').count(), 1, 'the website cannot switch a rule off with a synthetic event');
   assert.equal(await promotedBox.isChecked(), true);
+  await promotedBox.evaluate(box => box.click());
+  await page.waitForTimeout(600);
+  assert.equal(await page.locator('#promoted-legacy.qf-collapsed').count(), 1, 'nor with a scripted click');
+  assert.deepEqual([await promotedBox.isChecked(), (await worker.evaluate(() => chrome.storage.local.get('settings'))).settings.hidePromoted], [true, true]);
+  assert.equal(await filters.locator('.error').innerText(), '');
+  assert.ok((await filters.locator('.filters').boundingBox()).x - (await page.locator('#feed-sort').boundingBox()).x < 4, 'the row is a left-aligned box');
   await oldBox.uncheck();
   await page.waitForFunction(() => !document.querySelector('#old-sdui.qf-collapsed, #old-legacy.qf-collapsed'));
   await popup.reload();
