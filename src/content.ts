@@ -23,7 +23,7 @@ function postReason(root: HTMLElement): string {
   if (!feed()) return '';
   const source = config.hideSuggested || config.hideActivity ? postSource(root) : undefined;
   if (source === 'suggested' && config.hideSuggested) return 'Suggested post';
-  if (source === 'activity' && config.hideActivity) return 'Shown for someone else’s activity';
+  if (source === 'activity' && config.hideActivity) return 'Liked by others';
   if (config.hideOldPosts && (postAgeDays(root) ?? 0) >= config.maxPostAgeDays) return `Older than ${config.maxPostAgeDays} days`;
   const muted = config.muteWords.length ? mutedWord(postText(root), config.muteWords) : undefined;
   if (muted) return `Contains muted word “${muted}”`;
@@ -68,7 +68,14 @@ function paintPost(root: HTMLElement, record: Post) {
 // The post rules, switchable in the feed itself beneath LinkedIn's Sort by control.
 const filterHost = newHost('post'); filterHost.classList.add('qf-filter-host');
 type FilterSwitch = Exclude<typeof FEED_FILTER_KEYS[number], 'maxPostAgeDays'>;
-const FILTER_SWITCHES: [FilterSwitch, string][] = [['hidePromoted', 'Contains “promoted”'], ['hideSuggested', 'Suggested'], ['hideActivity', 'Others’ activity'], ['hideBait', 'Engagement bait'], ['hideOldPosts', 'Older than']];
+// Each switch's name and the explanation shown when the reader hovers over it.
+const FILTER_SWITCHES: [FilterSwitch, string, string][] = [
+  ['hidePromoted', 'Contains “promoted”', 'Hides adverts, and any other post containing the word “promoted”.'],
+  ['hideSuggested', 'Suggested', 'Hides posts LinkedIn labels “Suggested”, from people and pages you do not follow.'],
+  ['hideActivity', 'Liked by others', 'Hides posts that appear only because someone you know liked, commented on or followed something. Reposts stay.'],
+  ['hideBait', 'Engagement bait', 'Hides posts written as a long run of short one-line sentences ending in a question. It judges layout only, so it can catch a genuine post.'],
+  ['hideOldPosts', 'Older than', 'Hides posts older than the age you choose.'],
+];
 let filters: { boxes: [FilterSwitch, HTMLInputElement][]; days: HTMLSelectElement; error: HTMLElement } | undefined;
 let filterError = '';
 const STALE = 'Quiet Feed was updated or reloaded. Refresh this page to carry on.';
@@ -89,14 +96,15 @@ function paintFilters() {
     const title = document.createElement('span'); title.className = 'title';
     const mark = document.createElement('span'); mark.className = 'mark'; mark.setAttribute('aria-hidden', 'true'); mark.textContent = 'q.';
     const name = document.createElement('span'); name.textContent = 'Quiet Feed hides:';
+    title.title = 'Tick a box to hide that kind of post. Every hidden post keeps a Show Post button, and your choices are saved.';
     title.append(mark, name);
     const error = document.createElement('span'); error.className = 'error'; error.setAttribute('role', 'status');
-    const check = (text: string) => {
+    const check = (text: string, tip: string) => {
       const label = document.createElement('label'), input = document.createElement('input');
-      input.type = 'checkbox'; label.append(input, text); return { label, input };
+      input.type = 'checkbox'; label.title = tip; label.append(input, text); return { label, input };
     };
-    const switches = FILTER_SWITCHES.map(([key, text]) => ({ key, ...check(text) }));
-    const days = document.createElement('select'); days.setAttribute('aria-label', 'Post age');
+    const switches = FILTER_SWITCHES.map(([key, text, tip]) => ({ key, ...check(text, tip) }));
+    const days = document.createElement('select'); days.setAttribute('aria-label', 'Post age'); days.title = 'Choose how old a post must be before it is hidden.';
     for (const value of POST_AGE_OPTIONS) days.add(new Option(`${value} days`, String(value)));
     switches.at(-1)!.label.append(days);
     filters = { boxes: switches.map(item => [item.key, item.input]), days, error };

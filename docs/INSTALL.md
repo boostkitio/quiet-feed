@@ -6,13 +6,13 @@ Quiet Feed is a free extension for desktop Chrome and Edge, on Windows, Mac or L
 
 1. Extract this ZIP into a folder you will keep, for example `Documents/Quiet-Feed`.
 2. Open `chrome://extensions` (or `edge://extensions`), turn on **Developer mode**, click **Load unpacked** and choose that folder.
-3. Open or refresh LinkedIn. A **Quiet Feed hides:** row appears at the top of your feed.
+3. Open or refresh LinkedIn. A **Quiet Feed hides:** row appears at the top of your feed. Hover over anything in the row to see what it does.
 
 Chrome may remind you that a developer-mode extension is running. That is expected for an extension installed this way.
 
 ## What it does
 
-- Hides posts marked **Promoted**, **Suggested** posts, and posts shown only because someone else liked or commented.
+- Hides posts marked **Promoted**, **Suggested** posts, and posts **Liked by others** (shown only because someone else liked or commented).
 - Hides posts older than 7, 14, 30 or 90 days.
 - Hides **Jobs recommended for you** and **Videos for you**.
 - Optionally hides posts written in one-line engagement-bait format, posts containing words you mute, and the **LinkedIn News** and **Today’s puzzles** panels.
@@ -34,4 +34,10 @@ With this on, the text of loaded comments is sent to TypeSafe for checking. Your
 
 To update, extract the new ZIP over the same folder, click the reload icon on Quiet Feed at `chrome://extensions`, then refresh LinkedIn. To remove it, click **Remove** on the same page.
 
-Quiet Feed is an early release and is not affiliated with LinkedIn or TypeSafe. It works on the LinkedIn website, not the mobile apps.
+## Good to know
+
+- It works on the LinkedIn website in desktop Chrome, Edge and other Chromium browsers such as Brave. It does not work in Firefox, Safari or the mobile apps.
+- It reads the labels LinkedIn prints on posts, so it needs LinkedIn set to English. In other languages posts simply stay visible.
+- LinkedIn changes its pages from time to time. If a rule stops working, nothing breaks: posts just show as normal until an update catches up.
+
+Quiet Feed is an early release and is not affiliated with LinkedIn or TypeSafe.

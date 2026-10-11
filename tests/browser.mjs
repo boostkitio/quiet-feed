@@ -181,10 +181,13 @@ try {
   await page.locator('#old-legacy.qf-collapsed').waitFor();
   assert.equal(analysed.length,0,'age filtering needs no pairing or AI calls');
   // Suggested posts and posts shown for someone else's activity collapse by their header label.
-  for (const [post, label] of [['suggested-sdui', 'Suggested post'], ['activity-sdui', 'Shown for someone else’s activity'], ['activity-legacy', 'Shown for someone else’s activity']]) await page.locator(`#${post}.qf-collapsed`).getByText(label, { exact: true }).waitFor();
+  for (const [post, label] of [['suggested-sdui', 'Suggested post'], ['activity-sdui', 'Liked by others'], ['activity-legacy', 'Liked by others']]) await page.locator(`#${post}.qf-collapsed`).getByText(label, { exact: true }).waitFor();
   for (const post of ['loves-mention', 'bait-post', 'list-post', 'muted-post', 'muted-partial']) assert.equal(await page.locator(`#${post}.qf-collapsed`).count(), 0, `${post} stays by default`);
-  const suggestedBox = filters.getByRole('checkbox', { name: 'Suggested', exact: true }), activityBox = filters.getByRole('checkbox', { name: 'Others’ activity' }), baitBox = filters.getByRole('checkbox', { name: 'Engagement bait' });
+  const suggestedBox = filters.getByRole('checkbox', { name: 'Suggested', exact: true }), activityBox = filters.getByRole('checkbox', { name: 'Liked by others' }), baitBox = filters.getByRole('checkbox', { name: 'Engagement bait' });
   assert.deepEqual([await suggestedBox.isChecked(), await activityBox.isChecked(), await baitBox.isChecked()], [true, true, false]);
+  const tips = await filters.locator('label, select, .title').evaluateAll(items => items.map(item => item.title));
+  assert.ok(tips.length === 7 && tips.every(tip => tip.length > 20), 'every item in the row explains itself on hover');
+  assert.ok((await filters.locator('label', { hasText: 'Liked by others' }).getAttribute('title')).includes('Reposts stay'));
   await suggestedBox.uncheck();
   assert.deepEqual([await page.locator('#suggested-sdui.qf-collapsed').count(), await page.locator('#activity-sdui.qf-collapsed').count()], [0, 1]);
   await suggestedBox.check(); await activityBox.uncheck();

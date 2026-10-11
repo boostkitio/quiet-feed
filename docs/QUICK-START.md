@@ -12,7 +12,8 @@ The **Videos for you** recommendation section is also removed automatically, wit
 
 On the feed, a **Quiet Feed hides:** row sits just beneath LinkedIn's **Sort by** control. Use it to switch **Contains “promoted”** and **Older than** on or off and to choose 7, 14, 30 or 90 days. Changes apply straight away and are remembered.
 
-The feed row also switches **Suggested** posts, posts shown for **Others’ activity** (for example “Name celebrates this”) and, off by default, **Engagement bait** formatting. In the popup, **Mute Words** collapses posts containing words you list, matched as whole words, and **Hide News & Puzzles** clears those panels from the right-hand column.
+The feed row also switches **Suggested** posts, posts **Liked by others** (shown only because someone else reacted, for example “Name celebrates this”) and, off by default, **Engagement bait** formatting. In the popup, **Mute Words** collapses posts containing words you list, matched as whole words, and **Hide News & Puzzles** clears those panels from the right-hand column.
+ Hover over any item in the row for a short explanation.
 
 There is no threshold slider and no **Why This Result** box. Suspected AI reply text collapses to **Likely AI Reply / Show Reply**. Its author and any nested discussion stay available. Other replies retain a small feedback control.
 
@@ -28,7 +29,7 @@ Up to 200 choices are saved locally. A few saved examples are sent to TypeSafe a
 ## Activate An Update
 
 1. Stop the old companion using **Stop Quiet Feed.cmd**.
-2. Extract all files from **Quiet-Feed-0.7.1.zip** over your existing installation. Keep its private connection file.
+2. Extract all files from **Quiet-Feed-0.7.2.zip** over your existing installation. Keep its private connection file.
 3. Run **Start Quiet Feed.cmd** again.
 4. Open `chrome://extensions`, click **Reload** on **Quiet Feed**, then refresh LinkedIn.
 
