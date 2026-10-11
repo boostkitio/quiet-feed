@@ -40,7 +40,9 @@ try{
  const currentPage=await context.newPage();await currentPage.goto('https://www.linkedin.com/feed/');
  await currentPage.waitForFunction(()=>document.documentElement.dataset.quietFeedBuild===document.documentElement.dataset.quietFeedWorkerBuild);
  // A page left open across an extension reload must say so, not fail silently or throw.
- const pageErrors=[];currentPage.on('pageerror',error=>pageErrors.push(String(error)));
+ // The debugger protocol reports uncaught errors from the extension's own script, which page events miss.
+ const pageErrors=[];const debug=await context.newCDPSession(currentPage);
+ debug.on('Runtime.exceptionThrown',event=>pageErrors.push(event.exceptionDetails.exception?.description||event.exceptionDetails.text));await debug.send('Runtime.enable');
  const row=currentPage.locator('.qf-filter-host');
  await row.getByText('Quiet Feed hides:',{exact:true}).waitFor();
  let [liveWorker]=context.serviceWorkers();if(!liveWorker)liveWorker=await context.waitForEvent('serviceworker');
@@ -48,6 +50,8 @@ try{
  await row.getByText('Quiet Feed was updated or reloaded. Refresh this page to carry on.',{exact:true}).waitFor();
  assert.equal(await row.getByRole('checkbox',{name:'Suggested',exact:true}).isDisabled(),true,'stale controls are disabled rather than silently ignored');
  assert.equal(await currentPage.locator('#promoted-legacy.qf-collapsed').count(),1,'what was hidden stays hidden');
+ for(const box of await row.getByRole('checkbox').all())await box.click({force:true,timeout:2000}).catch(()=>{});
+ await currentPage.locator('#short-comment').scrollIntoViewIfNeeded();
  await currentPage.waitForTimeout(3500);
  assert.deepEqual(pageErrors,[],'a stale page raises no errors');
  console.log('Passed: legacy Invalid extension request reproduced; mismatched controls gated with clear update instructions; clean installation loads matching worker and page; a page left open across an extension reload asks for a refresh. Chrome command-line profiles do not test the real user-profile reload action.');
