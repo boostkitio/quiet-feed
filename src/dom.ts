@@ -34,6 +34,14 @@ export function postAgeDays(root: HTMLElement, now = new Date()): number | undef
   }
   return newest;
 }
+// LinkedIn's own Sort by control at the top of the feed; the filter row sits beneath it.
+export function feedSortControl(): HTMLElement | null {
+  for (const control of document.querySelectorAll<HTMLElement>('main button, main [role="button"]')) {
+    if (control.closest(`${POSTS}, ${COMMENT_SECTIONS}, ${EXCLUDED}`)) continue;
+    if (/^sort by:/i.test(normalise(control.textContent || ''))) return control;
+  }
+  return null;
+}
 
 export function videoRecommendationSections(): HTMLElement[] {
   return recommendationSections('videos for you');

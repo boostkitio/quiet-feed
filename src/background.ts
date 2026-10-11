@@ -1,4 +1,4 @@
-import { API, BUILD_VERSION, DEFAULTS, EMPTY_FEEDBACK, MAX_TEXT, MIN_TEXT, VERSION, cleanSettings, normalise, type FeedbackIndex, type Settings, type Verdict } from './shared.ts';
+import { API, BUILD_VERSION, DEFAULTS, EMPTY_FEEDBACK, FEED_FILTER_KEYS, MAX_TEXT, MIN_TEXT, VERSION, cleanSettings, normalise, type FeedbackIndex, type Settings, type Verdict } from './shared.ts';
 
 const ready = Promise.all([
   chrome.storage.local.setAccessLevel({ accessLevel: 'TRUSTED_CONTEXTS' }),
@@ -17,6 +17,13 @@ class CompanionError extends Error {
   constructor(message: string, status: number) { super(message); this.status = status; }
 }
 async function settings(): Promise<Settings> { return cleanSettings((await chrome.storage.local.get('settings')).settings as Partial<Settings> | undefined); }
+// Callers send only the fields they own, so the popup and the feed filter row never overwrite each other.
+async function saveSettings(patch: Partial<Settings>): Promise<Settings> {
+  const config = cleanSettings({ ...(await settings()), ...patch });
+  await chrome.storage.local.set({ settings: config });
+  await broadcast({ type: 'settingsChanged', settings: config });
+  return config;
+}
 async function feedbackIndex(): Promise<FeedbackIndex> { return ((await chrome.storage.local.get('feedbackIndex')).feedbackIndex as FeedbackIndex) || EMPTY_FEEDBACK; }
 async function syncFeedback(index: FeedbackIndex | undefined) {
   if (!index || !Number.isSafeInteger(index.revision) || !index.decisions) return;
@@ -124,6 +131,11 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
       await broadcast({ type: 'feedbackChanged', text, label: message.label, revision: result.feedback.revision });
       return { verdict: { manualDecision: message.label, feedbackRevision: result.feedback.revision }, feedback: result.feedback };
     }
+    if (message.type === 'saveFilters' && linkedin) {
+      const patch: Record<string, unknown> = {};
+      for (const key of FEED_FILTER_KEYS) patch[key] = message.settings?.[key];
+      return { settings: await saveSettings(patch) };
+    }
     if (!popup) throw new Error('Invalid extension request');
     if (message.type === 'status') {
       const local = await chrome.storage.local.get('token');
@@ -132,14 +144,7 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
       try { health = await companion('/health'); } catch (e) { error = safeError(e); }
       return { settings: await settings(), paired: Boolean(local.token), session, health, error, feedback: await feedbackIndex(), build: BUILD_VERSION };
     }
-    if (message.type === 'save') {
-      const config = cleanSettings(message.settings);
-      await chrome.storage.local.set({ settings: config });
-      for (const tab of await chrome.tabs.query({ url: 'https://www.linkedin.com/*' })) {
-        if (tab.id) chrome.tabs.sendMessage(tab.id, { type: 'settingsChanged', settings: config }).catch(() => {});
-      }
-      return { settings: config };
-    }
+    if (message.type === 'save') return { settings: await saveSettings(message.settings) };
     if (message.type === 'pair') {
       if (typeof message.token !== 'string' || !/^[a-f0-9]{48}$/.test(message.token.trim())) throw new Error('Invalid pairing code. Copy the code from Start Quiet Feed.');
       const previous = (await chrome.storage.local.get('token')).token;

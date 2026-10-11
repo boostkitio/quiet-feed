@@ -111,6 +111,52 @@ try {
   assert.equal(await page.locator('#promoted-legacy.qf-collapsed').count(), 1, 'the promoted rule still applies off the feed');
   await page.evaluate(() => history.pushState({}, '', '/feed/'));
   await page.locator('#old-sdui.qf-collapsed').waitFor();
+  // The same two rules are switchable in the feed, beneath LinkedIn's Sort by control.
+  const filters = page.locator('#feed-sort > .qf-filter-host');
+  await filters.getByText('Quiet Feed hides:', { exact: true }).waitFor();
+  assert.equal(await page.locator('.qf-filter-host').count(), 1, 'one filter row, attached to the real Sort by control only');
+  const promotedBox = filters.getByRole('checkbox', { name: 'Contains “promoted”' }), oldBox = filters.getByRole('checkbox', { name: 'Older than' }), ageSelect = filters.getByRole('combobox', { name: 'Post age' });
+  assert.deepEqual([await promotedBox.isChecked(), await oldBox.isChecked(), await ageSelect.inputValue()], [true, true, '7']);
+  // selectOption dispatches a synthetic event, which the row ignores by design; use real keys.
+  const ages = ['7', '14', '30', '90'];
+  async function chooseAge(target) {
+    await ageSelect.focus();
+    for (let steps = ages.indexOf(target) - ages.indexOf(await ageSelect.inputValue()); steps; steps -= Math.sign(steps)) await page.keyboard.press(steps > 0 ? 'ArrowDown' : 'ArrowUp');
+  }
+  await ageSelect.selectOption('90'); await page.waitForTimeout(600);
+  assert.equal(await ageSelect.inputValue(), '7', 'a scripted age change is not saved');
+  await chooseAge('30');
+  await page.waitForFunction(() => !document.querySelector('#old-legacy.qf-collapsed'));
+  await page.locator('#old-sdui').getByText('Older than 30 days', { exact: true }).waitFor();
+  assert.equal((await worker.evaluate(() => chrome.storage.local.get('settings'))).settings.maxPostAgeDays, 30, 'the chosen age is saved');
+  await page.reload();
+  await page.locator('#old-sdui').getByText('Older than 30 days', { exact: true }).waitFor();
+  assert.equal(await ageSelect.inputValue(), '30', 'the chosen age survives a reload');
+  assert.equal(await page.locator('#old-legacy.qf-collapsed').count(), 0);
+  await chooseAge('14');
+  await page.locator('#old-legacy.qf-collapsed').waitFor();
+  await promotedBox.uncheck();
+  await page.waitForFunction(() => !document.querySelector('#promoted-legacy.qf-collapsed, #promoted-body.qf-collapsed'));
+  assert.equal(await page.locator('#old-sdui.qf-collapsed').count(), 1, 'the promoted switch leaves the age rule alone');
+  await promotedBox.check();
+  await page.locator('#promoted-legacy.qf-collapsed').waitFor();
+  await promotedBox.evaluate(box => { box.checked = false; box.dispatchEvent(new Event('change', { bubbles: true })); });
+  await page.waitForTimeout(600);
+  assert.equal(await page.locator('#promoted-legacy.qf-collapsed').count(), 1, 'the website cannot switch a rule off with a synthetic event');
+  assert.equal(await promotedBox.isChecked(), true);
+  await oldBox.uncheck();
+  await page.waitForFunction(() => !document.querySelector('#old-sdui.qf-collapsed, #old-legacy.qf-collapsed'));
+  await popup.reload();
+  assert.equal(await popup.locator('#hideOldPosts').isChecked(), false, 'the popup reflects a choice made in the feed');
+  await popup.locator('#hideRecommendedJobs').uncheck(); await popup.locator('#hideRecommendedJobs').check();
+  assert.equal((await worker.evaluate(() => chrome.storage.local.get('settings'))).settings.maxPostAgeDays, 14, 'popup saves keep the age chosen in the feed');
+  await oldBox.check(); await chooseAge('7');
+  await page.locator('#old-sdui').getByText('Older than 7 days', { exact: true }).waitFor();
+  await page.evaluate(() => history.pushState({}, '', '/posts/fixture'));
+  await page.waitForFunction(() => document.querySelector('.qf-filter-host').hidden);
+  await page.evaluate(() => history.pushState({}, '', '/feed/'));
+  await filters.getByText('Quiet Feed hides:', { exact: true }).waitFor();
+  await popup.reload();
   await popup.locator('#hideOldPosts').uncheck();
   await page.waitForFunction(() => !document.querySelector('#old-sdui.qf-collapsed, #old-legacy.qf-collapsed'));
   assert.equal(await page.locator('#old-sdui > .qf-host:not([hidden])').count(), 0, 'switching the age rule off removes its bar');
@@ -289,5 +335,5 @@ try {
   await recoveredPage.locator('#ai-body.qf-reply-collapsed').waitFor({ state: 'attached' });
   assert.equal(await worker.evaluate(() => chrome.storage.local.get('token').then(data => data.token === 'b'.repeat(48))), true, 'reload repairs the stale pairing before filtering');
   assert.equal(await recoveredPage.evaluate(async url => { try { return (await fetch(url)).ok; } catch { return false; } }, `chrome-extension://${id}/local-connection.json`), false, 'websites cannot read the local pairing file');
-  console.log(JSON.stringify({ passed: true, fixtureRequests: analysed.length, checks: ['original posts never analysed or labelled', 'legacy and SDUI comments', 'nested replies preserved and independently filtered', 'short AI-style replies', 'duplicate-wrapper and text-cache deduplication', 'edit and stale-response handling', 'dynamic loading', 'show/hide reply', 'pause restores content and clears UI', 'no slider or Why This Result', 'promoted posts preserved', 'draft/message exclusion', 'API failures fail open', 'budget and reset', 'legacy settings migration', 'posts a week or older collapsed and revealable on the feed only', 'recent, recently reposted and undated posts preserved', 'older-posts toggle persists', 'legacy/SDUI/dynamic Videos for you modules removed', 'video-title mentions and neighbouring posts preserved', 'video section restored on pause or title change', 'missing and rejected pairing never consume allowance', 'automatic recovery from stale pairing', 'automatic connection after browser restart', 'local pairing file inaccessible to websites', 'trusted-click feedback only', 'short reply flags persist across reloads', 'keep corrections override model flags', 'future replies use saved preferences', 'late inference cannot override feedback', 'reset learning clears decisions'] }, null, 2));
+  console.log(JSON.stringify({ passed: true, fixtureRequests: analysed.length, checks: ['original posts never analysed or labelled', 'legacy and SDUI comments', 'nested replies preserved and independently filtered', 'short AI-style replies', 'duplicate-wrapper and text-cache deduplication', 'edit and stale-response handling', 'dynamic loading', 'show/hide reply', 'pause restores content and clears UI', 'no slider or Why This Result', 'promoted posts preserved', 'draft/message exclusion', 'API failures fail open', 'budget and reset', 'legacy settings migration', 'posts a week or older collapsed and revealable on the feed only', 'recent, recently reposted and undated posts preserved', 'older-posts toggle persists', 'feed filter row beneath Sort by: promoted and age switches, 7/14/30/90 day choice saved', 'synthetic page events cannot change filters', 'legacy/SDUI/dynamic Videos for you modules removed', 'video-title mentions and neighbouring posts preserved', 'video section restored on pause or title change', 'missing and rejected pairing never consume allowance', 'automatic recovery from stale pairing', 'automatic connection after browser restart', 'local pairing file inaccessible to websites', 'trusted-click feedback only', 'short reply flags persist across reloads', 'keep corrections override model flags', 'future replies use saved preferences', 'late inference cannot override feedback', 'reset learning clears decisions'] }, null, 2));
 } finally { await context?.close(); await new Promise(resolve => server.close(resolve)); }

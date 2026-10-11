@@ -13,10 +13,12 @@ export type FeedbackExample = { text: string; label: FeedbackLabel };
 export type FeedbackIndex = { revision: number; potentialAI: number; kept: number; decisions: Record<string, FeedbackLabel> };
 export const EMPTY_FEEDBACK: FeedbackIndex = { revision: 0, potentialAI: 0, kept: 0, decisions: {} };
 export type Verdict = { signals?: Signals; model?: string; cached?: boolean; skipped?: boolean; manualDecision?: FeedbackLabel; feedbackRevision?: number };
-export type Settings = { enabled: boolean; limit: number; hideRecommendedJobs: boolean; hideOldPosts: boolean };
-export const DEFAULTS: Settings = { enabled: true, limit: 100, hideRecommendedJobs: true, hideOldPosts: true };
-// Fixed age rule: a post stamped a week or more ago counts as old.
-export const MAX_POST_AGE_DAYS = 7;
+export type Settings = { enabled: boolean; limit: number; hideRecommendedJobs: boolean; hidePromoted: boolean; hideOldPosts: boolean; maxPostAgeDays: number };
+// Ages offered beside LinkedIn's Sort by control; a post stamped that many days ago or more counts as old.
+export const POST_AGE_OPTIONS = [7, 14, 30, 90];
+export const DEFAULTS: Settings = { enabled: true, limit: 100, hideRecommendedJobs: true, hidePromoted: true, hideOldPosts: true, maxPostAgeDays: 7 };
+// The only settings the LinkedIn page itself may change, from its feed filter row.
+export const FEED_FILTER_KEYS = ['hidePromoted', 'hideOldPosts', 'maxPostAgeDays'] as const;
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 const UNIT_DAYS: Record<string, number> = { s: 0, second: 0, m: 0, minute: 0, h: 0, hour: 0, d: 1, day: 1, w: 7, week: 7, mo: 30, month: 30, yr: 365, y: 365, year: 365 };
 export function normalise(text: string): string { return text.replace(/\s+/g, ' ').trim(); }
@@ -46,7 +48,9 @@ export function cleanSettings(value: Partial<Settings> = {}): Settings {
   return {
     enabled: typeof value.enabled === 'boolean' ? value.enabled : DEFAULTS.enabled,
     hideRecommendedJobs: typeof value.hideRecommendedJobs === 'boolean' ? value.hideRecommendedJobs : DEFAULTS.hideRecommendedJobs,
+    hidePromoted: typeof value.hidePromoted === 'boolean' ? value.hidePromoted : DEFAULTS.hidePromoted,
     hideOldPosts: typeof value.hideOldPosts === 'boolean' ? value.hideOldPosts : DEFAULTS.hideOldPosts,
+    maxPostAgeDays: POST_AGE_OPTIONS.includes(value.maxPostAgeDays as number) ? value.maxPostAgeDays as number : DEFAULTS.maxPostAgeDays,
     limit: typeof value.limit === 'number' && Number.isFinite(value.limit)
       ? Math.min(500, Math.max(10, Math.round(value.limit))) : DEFAULTS.limit,
   };

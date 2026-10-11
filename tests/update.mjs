@@ -20,6 +20,7 @@ try{
  const page=await context.newPage();await page.goto('https://www.linkedin.com/feed/');
  await page.waitForFunction(()=>document.documentElement.dataset.quietFeedWorkerBuild==='legacy');
  assert.equal(await page.locator('.qf-reply-host:not([hidden])').count(),0,'unsupported feedback controls are not offered');
+ assert.equal(await page.locator('.qf-filter-host:not([hidden])').count(),0,'the feed filter row needs the matching worker');
  const popup=await context.newPage();await popup.goto(`chrome-extension://${id}/popup.html`);
  await popup.getByText('Update Ready',{exact:true}).waitFor();
  assert.ok((await popup.locator('#connectionDetail').innerText()).includes('chrome://extensions'));

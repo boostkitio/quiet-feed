@@ -32,13 +32,13 @@ async function status() {
   if (!state.paired || !online || needsAttention) $<HTMLDetailsElement>('settingsPanel').open = true;
 }
 async function save() {
-  const next: Settings = {
+  const next: Partial<Settings> = {
     enabled: $<HTMLInputElement>('enabled').checked,
     hideRecommendedJobs: $<HTMLInputElement>('hideRecommendedJobs').checked,
     hideOldPosts: $<HTMLInputElement>('hideOldPosts').checked,
     limit: Number($<HTMLInputElement>('limit').value),
   };
-  await send({ type: 'save', settings: next }); config = next;
+  config = (await send({ type: 'save', settings: next })).settings;
   $('message').textContent = 'Saved. Open LinkedIn tabs update automatically.';
 }
 for (const id of ['enabled', 'hideRecommendedJobs', 'hideOldPosts', 'limit']) $(id).addEventListener('change', () => { void save().catch(showError); });

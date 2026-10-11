@@ -1,5 +1,5 @@
-import { BUILD_VERSION, DEFAULTS, MAX_POST_AGE_DAYS, PREFERENCE_THRESHOLD, cleanSettings, flagged, type FeedbackLabel, type Settings, type Verdict } from './shared.ts';
-import { POSTS, COMMENTS, EXCLUDED, containsPromoted, postAgeDays, replyNodes, replyText, videoRecommendationSections, jobRecommendationSections } from './dom.ts';
+import { BUILD_VERSION, DEFAULTS, POST_AGE_OPTIONS, PREFERENCE_THRESHOLD, cleanSettings, flagged, type FeedbackLabel, type Settings, type Verdict } from './shared.ts';
+import { POSTS, COMMENTS, EXCLUDED, containsPromoted, feedSortControl, postAgeDays, replyNodes, replyText, videoRecommendationSections, jobRecommendationSections } from './dom.ts';
 
 type Base = { revealed: boolean; host: HTMLElement; signature: string };
 type Reply = Base & { text: string; verdict?: Verdict; visible: boolean; pending: boolean; failed: boolean; saving?: boolean; error?: string; feedbackGeneration: number };
@@ -14,7 +14,7 @@ let workerCompatible = false;
 const supported = () => /^\/(feed(?:\/|$)|posts\/|in\/)/.test(location.pathname);
 // The age rule is for the feed only; a post or profile opened on purpose stays as it is.
 const feed = () => /^\/feed(?:\/|$)/.test(location.pathname);
-const isOld = (root: HTMLElement) => feed() && (postAgeDays(root) ?? 0) >= MAX_POST_AGE_DAYS;
+const isOld = (root: HTMLElement) => feed() && (postAgeDays(root) ?? 0) >= config.maxPostAgeDays;
 const styles = `:host{display:block;font:12px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#385247}:host([hidden]){display:none!important}*{box-sizing:border-box}.bar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0}.post{padding:10px 14px}span{font-weight:500}button{font:600 12px "Segoe UI",sans-serif;cursor:pointer;background:transparent;color:#315d48;border:1px solid #cedbd1;border-radius:6px;padding:5px 9px;white-space:nowrap}button:hover{background:#edf4ed}button:focus-visible{outline:2px solid #315d48;outline-offset:3px}`;
 const observer = new IntersectionObserver(entries => {
   for (const entry of entries) { const record = replies.get(entry.target as HTMLElement); if (record) record.visible = entry.isIntersecting; }
@@ -44,12 +44,49 @@ function render(record: Base, show: boolean, hide: boolean, kind: 'post' | 'repl
   bar.append(label, button); shadow.append(style, bar);
 }
 function paintPost(root: HTMLElement, record: Post) {
-  const old = record.old && config.hideOldPosts;
-  const show = config.enabled && supported() && (record.promoted || old);
+  const promoted = record.promoted && config.hidePromoted;
+  const show = config.enabled && supported() && (promoted || (record.old && config.hideOldPosts));
   const hide = show && !record.revealed;
   root.classList.toggle('qf-collapsed', hide);
   if (show && record.host.parentElement !== root) root.prepend(record.host);
-  render(record, show, hide, 'post', record.promoted ? 'Contains “promoted”' : `Older than ${MAX_POST_AGE_DAYS} days`, () => { record.revealed = !record.revealed; paintPost(root, record); });
+  render(record, show, hide, 'post', promoted ? 'Contains “promoted”' : `Older than ${config.maxPostAgeDays} days`, () => { record.revealed = !record.revealed; paintPost(root, record); });
+}
+// The two post rules, switchable in the feed itself beneath LinkedIn's Sort by control.
+const filterHost = newHost('post'); filterHost.classList.add('qf-filter-host');
+let filters: { promoted: HTMLInputElement; old: HTMLInputElement; days: HTMLSelectElement } | undefined;
+function paintFilters() {
+  const sort = config.enabled && feed() && workerCompatible ? feedSortControl() : null;
+  filterHost.hidden = !sort;
+  if (!sort) return;
+  const row = sort.closest<HTMLElement>('[role="listitem"]') ?? sort.parentElement!;
+  if (filterHost.parentElement !== row) row.append(filterHost);
+  if (!filters) {
+    const style = document.createElement('style');
+    style.textContent = styles + '.filters{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:6px 16px;padding:8px 0 2px}label{display:inline-flex;align-items:center;gap:6px;cursor:pointer}input{margin:0;accent-color:#315d48}select{font:inherit;color:inherit;background:transparent;border:1px solid #cedbd1;border-radius:6px;padding:3px 5px;cursor:pointer}input:focus-visible,select:focus-visible{outline:2px solid #315d48;outline-offset:2px}';
+    const bar = document.createElement('div'); bar.className = 'filters'; bar.setAttribute('role', 'group'); bar.setAttribute('aria-label', 'Quiet Feed post filters');
+    const title = document.createElement('span'); title.textContent = 'Quiet Feed hides:';
+    const check = (text: string) => {
+      const label = document.createElement('label'), input = document.createElement('input');
+      input.type = 'checkbox'; label.append(input, text); return { label, input };
+    };
+    const promoted = check('Contains “promoted”'), old = check('Older than');
+    const days = document.createElement('select'); days.setAttribute('aria-label', 'Post age');
+    for (const value of POST_AGE_OPTIONS) days.add(new Option(`${value} days`, String(value)));
+    old.label.append(days);
+    filters = { promoted: promoted.input, old: old.input, days };
+    for (const control of [promoted.input, old.input, days]) control.addEventListener('change', event => { void saveFilters(event); });
+    bar.append(title, promoted.label, old.label); filterHost.shadowRoot!.append(style, bar);
+  }
+  filters.promoted.checked = config.hidePromoted; filters.old.checked = config.hideOldPosts;
+  filters.days.value = String(config.maxPostAgeDays);
+}
+async function saveFilters(event: Event) {
+  // Only a real click or key press may change settings; the page cannot script it.
+  if (event.isTrusted && filters) {
+    const response = await chrome.runtime.sendMessage({ type: 'saveFilters', settings: { hidePromoted: filters.promoted.checked, hideOldPosts: filters.old.checked, maxPostAgeDays: Number(filters.days.value) } }).catch(() => undefined);
+    if (response?.settings) config = cleanSettings(response.settings);
+  }
+  scan();
 }
 function paintReply(body: HTMLElement, record: Reply) {
   const active = config.enabled && supported() && workerCompatible;
@@ -102,6 +139,7 @@ async function saveFeedback(body: HTMLElement, record: Reply, label: FeedbackLab
   finally { record.saving = false; paintReply(body, record); }
 }
 function scan() {
+  paintFilters();
   const currentJobSections = new Set(supported() ? jobRecommendationSections() : []);
   for (const section of jobSections) {
     if (!currentJobSections.has(section)) { section.classList.remove('qf-jobs-hidden'); jobSections.delete(section); }
@@ -175,7 +213,7 @@ async function processQueue() {
 }
 chrome.runtime.onMessage.addListener(message => {
   if (message.type === 'settingsChanged') {
-    config = message.settings;
+    config = cleanSettings(message.settings);
     for (const record of replies.values()) record.failed = false;
     scan();
   }

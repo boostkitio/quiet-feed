@@ -14,9 +14,12 @@ test('classification keeps formulaic writing separate from the authorship style 
   assert.equal(flagged({ ...verdict, signals: { aiStyle: .86, boilerplate: .3, disclosure: .02 } }), false);
   assert.equal(flagged({ ...verdict, signals: { aiStyle: .2, boilerplate: .1, disclosure: .99 } }), true);
   const legacy = { enabled: true, mode: 'label', threshold: .65, limit: 40 };
-  assert.deepEqual(cleanSettings(legacy), { enabled: true, limit: 40, hideRecommendedJobs: true, hideOldPosts: true });
+  assert.deepEqual(cleanSettings(legacy), { enabled: true, limit: 40, hideRecommendedJobs: true, hidePromoted: true, hideOldPosts: true, maxPostAgeDays: 7 });
   assert.equal(cleanSettings({hideRecommendedJobs:false}).hideRecommendedJobs,false);
   assert.equal(cleanSettings({hideOldPosts:false}).hideOldPosts,false);
+  assert.equal(cleanSettings({hidePromoted:false}).hidePromoted,false);
+  assert.equal(cleanSettings({maxPostAgeDays:14}).maxPostAgeDays,14);
+  for (const value of [9, 0, -7, '14', null]) assert.equal(cleanSettings({maxPostAgeDays:value as number}).maxPostAgeDays,7,'only offered ages are accepted');
   assert.equal(cleanSettings({ limit: 100000 }).limit, 500);
 });
 test('post date stamps become whole days; anything that is not a stamp is ignored', () => {
