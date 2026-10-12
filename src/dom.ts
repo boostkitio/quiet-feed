@@ -48,7 +48,8 @@ export function postSource(root: HTMLElement): 'suggested' | 'activity' | undefi
     if (node.parentElement?.closest(`${COMMENT_SECTIONS}, ${EXCLUDED}, ${POST_BODY}`)) continue;
     if (SUGGESTED.test(text)) return 'suggested';
     const line = normalise(node.parentElement?.parentElement?.textContent || '');
-    if (ACTIVITY.test(text) || (line.length <= 90 && ACTIVITY.test(line))) return 'activity';
+    // "Name commented" carries the bare word in its own span after the name.
+    if (ACTIVITY.test(text) || /^commented$/i.test(text) || (line.length <= 90 && ACTIVITY.test(line))) return 'activity';
   }
   return undefined;
 }

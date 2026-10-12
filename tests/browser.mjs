@@ -183,7 +183,8 @@ try {
   await page.locator('#old-legacy.qf-collapsed').waitFor();
   assert.equal(analysed.length,0,'age filtering needs no pairing or AI calls');
   // Suggested posts and posts shown for someone else's activity collapse by their header label.
-  for (const [post, label] of [['suggested-sdui', 'Suggested post'], ['activity-sdui', 'Liked by others'], ['activity-legacy', 'Liked by others']]) await page.locator(`#${post}.qf-collapsed`).getByText(label, { exact: true }).waitFor();
+  for (const [post, label] of [['suggested-sdui', 'Suggested post'], ['activity-sdui', 'Liked by others'], ['activity-commented', 'Liked by others'], ['activity-legacy', 'Liked by others']]) await page.locator(`#${post}.qf-collapsed`).getByText(label, { exact: true }).waitFor();
+  assert.equal(await page.locator('#commented-headline.qf-collapsed').count(), 0);
   for (const post of ['loves-mention', 'bait-post', 'list-post', 'muted-post', 'muted-partial']) assert.equal(await page.locator(`#${post}.qf-collapsed`).count(), 0, `${post} stays by default`);
   const suggestedBox = filters.getByRole('checkbox', { name: 'Suggested', exact: true }), activityBox = filters.getByRole('checkbox', { name: 'Liked by others' }), baitBox = filters.getByRole('checkbox', { name: 'Engagement bait' });
   assert.deepEqual([await suggestedBox.isChecked(), await activityBox.isChecked(), await baitBox.isChecked()], [true, true, false]);
