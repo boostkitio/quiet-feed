@@ -8,10 +8,8 @@
     "status":  "active-internal",
     "criticality":  "medium",
     "updateTier":  "B",
-    "productionDeploymentRequiresApproval":  true,
     "context":  {
                     "companyBrain":  "C:\\dev\\projects\\_TOOLS\\company-brain",
-                    "workstream":  "C:\\dev\\projects\\_TOOLS\\company-brain\\workstreams\\quiet-feed",
-                    "repositoryContext":  "C:\\dev\\projects\\linkedin-typesafe-filter\\work\\public-export\\quiet-feed\\docs\\agent-context\\project.md"
+                    "workstream":  "C:\\dev\\projects\\_TOOLS\\company-brain\\workstreams\\quiet-feed"
                 }
 }
